@@ -32,6 +32,16 @@ class MemriseImportWidget(QWidget):
 		self.courseUrlLineEdit = QLineEdit()
 		self.layout.addWidget(self.courseUrlLineEdit)
 		
+		importModeSelectionLayout = QHBoxLayout()
+		self.layout.addLayout(importModeSelectionLayout)
+		self.importModeSelection = QComboBox()
+		self.importModeSelection.addItem("Update if first field matches existing note")
+		self.importModeSelection.addItem("Ignore if first field matches existing note")
+		self.importModeSelection.addItem("Import even if first field matches existing note")
+		importModeSelectionLayout.addWidget(QLabel("Select import mode"))
+		importModeSelectionLayout.addWidget(self.importModeSelection)
+		self.importModeSelection.setCurrentIndex(0)
+		
 		patienceLabel = QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!")
 		self.layout.addWidget(patienceLabel)
 		self.importCourseButton = QPushButton("Import course")
@@ -87,6 +97,7 @@ class MemriseImportWidget(QWidget):
 			mw.col.models.save(noteModel)
 			importer = TextImporter(mw.col, importFilePath)
 			importer.allowHTML = True
+			importer.importMode = self.importModeSelection.currentIndex()
 			importer.initMapping()
 			importer.run()
 			
