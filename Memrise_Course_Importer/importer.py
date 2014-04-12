@@ -16,9 +16,11 @@ from anki.stdmodels import addBasicModel
 from aqt import mw
 from aqt.qt import *
 from BeautifulSoup import BeautifulSoup
+from functools import partial
 
 class MemriseImporter(NoteImporter, QObject):
-	courseTitleChanged = pyqtSignal('QString')
+	courseChanged = pyqtSignal('QString')
+	levelChanged = pyqtSignal(int, 'QString')
 	levelCountChanged = pyqtSignal(int)
 	levelImported = pyqtSignal(int)
 	
@@ -134,19 +136,20 @@ class MemriseImporter(NoteImporter, QObject):
 		courseTitle, levelTitles = self.loadCourseInfo()
 		levelCount = len(levelTitles)
 		
-		self.courseTitleChanged.emit(courseTitle)
+		self.courseChanged.emit(courseTitle)
 		self.levelCountChanged.emit(levelCount)
 		
 		self.initMapping()
 		
 		# This looks ridiculous, sorry. Figure out how many zeroes we need
-		# to order the subdecks alphabetically, e.g. if there are 100+ levels
+		# to order the tags alphabetically, e.g. if there are 100+ levels
 		# we'll need to write "Level 001", "Level 002" etc.
 		zeroCount = len(str(levelCount))
 		
 		# fetch notes data for each level
 		memriseNotes = []
 		for levelNum, levelTitle in enumerate(levelTitles, start=1):
+			self.levelChanged.emit(levelNum, levelTitle)
 			tags = [self.prepareLevelTag(levelNum, zeroCount)]
 			titleTag = self.prepareTag(levelTitle)
 			if titleTag:
@@ -195,7 +198,12 @@ class MemriseImportWidget(QWidget):
 		fileDialog = QFileDialog()
 		filename = fileDialog.getExistingDirectory(self, 'Select media folder')
 		self.mediaDirectoryPathLineEdit.setText(filename)
-		
+	
+	def selectLevelDeck(self, levelCount, levelNum, courseTitle, levelTitle):
+		zeroCount = len(str(levelCount))
+		deckTitle = u"{:s}::Level {:s}: {:s}".format(courseTitle, str(levelNum).zfill(zeroCount), levelTitle) 
+		self.selectDeck(deckTitle)
+	
 	def selectDeck(self, deckTitle):	
 		# load or create Basic Note Type
 		model = mw.col.models.byName(_("Basic"))
@@ -218,24 +226,27 @@ class MemriseImportWidget(QWidget):
 		mw.col.decks.select(did)
 		mw.col.models.setCurrent(model)
 		
-	def setLevelCount(self, levelCount):
-		self.progressBar.setRange(0,levelCount)
-		self.progressBar.setValue(0)
-		
 	def importCourse(self):
 		self.importCourseButton.hide()
 		self.progressBar.show()
+		self.progressBar.setValue(0)
 		
 		courseUrl = self.courseUrlLineEdit.text()
 
 		# import into the collection
 		importer = MemriseImporter(mw.col, courseUrl)
-		importer.courseTitleChanged.connect(self.selectDeck)
-		importer.levelCountChanged.connect(self.setLevelCount)
-		importer.levelImported.connect(self.progressBar.setValue)
 		
+		# import options
 		importer.allowHTML = True
 		importer.importMode = self.importModeSelection.currentIndex()
+		
+		# signals for deck selection/creation
+		importer.courseChanged.connect(self.selectDeck)
+		
+		# signals for progress bar
+		importer.levelCountChanged.connect(partial(self.progressBar.setRange,0))
+		importer.levelImported.connect(self.progressBar.setValue)
+		
 		importer.run()
 		
 		# refresh deck browser so user can see the newly imported deck
