@@ -17,15 +17,16 @@ from aqt import mw
 from aqt.qt import *
 from BeautifulSoup import BeautifulSoup
 
-class MemriseImporter(NoteImporter):
+class MemriseImporter(NoteImporter, QObject):
+	courseTitleChanged = pyqtSignal('QString')
+	levelCountChanged = pyqtSignal(int)
+	levelImported = pyqtSignal(int)
+	
 	def __init__(self, *args):
 		NoteImporter.__init__(self, *args)
+		QObject.__init__(self)
+		
 		self.initMapping()
-		self.selectDeck = lambda deckName: None
-
-	def setSelectDeckLambda(self, callback):
-		if callable(callback):
-			self.selectDeck = callback
 
 	def fields(self):
 		"Number of fields."
@@ -133,7 +134,9 @@ class MemriseImporter(NoteImporter):
 		courseTitle, levelTitles = self.loadCourseInfo()
 		levelCount = len(levelTitles)
 		
-		self.selectDeck(courseTitle)
+		self.courseTitleChanged.emit(courseTitle)
+		self.levelCountChanged.emit(levelCount)
+		
 		self.initMapping()
 		
 		# This looks ridiculous, sorry. Figure out how many zeroes we need
@@ -149,6 +152,7 @@ class MemriseImporter(NoteImporter):
 			if titleTag:
 				tags.append(titleTag)
 			memriseNotes.extend(self.getLevelNotes(levelNum, tags))
+			self.levelImported.emit(levelNum)
 		
 		return memriseNotes
 
@@ -182,6 +186,10 @@ class MemriseImportWidget(QWidget):
 		self.importCourseButton.clicked.connect(self.importCourse)
 		self.layout.addWidget(self.importCourseButton)
 		
+		self.progressBar = QProgressBar()
+		self.progressBar.hide()
+		self.layout.addWidget(self.progressBar)
+		
 	# not used - the MediaManager class can provide the media directory path
 	def selectMediaDirectory(self):
 		fileDialog = QFileDialog()
@@ -210,12 +218,22 @@ class MemriseImportWidget(QWidget):
 		mw.col.decks.select(did)
 		mw.col.models.setCurrent(model)
 		
+	def setLevelCount(self, levelCount):
+		self.progressBar.setRange(0,levelCount)
+		self.progressBar.setValue(0)
+		
 	def importCourse(self):
+		self.importCourseButton.hide()
+		self.progressBar.show()
+		
 		courseUrl = self.courseUrlLineEdit.text()
 
 		# import into the collection
 		importer = MemriseImporter(mw.col, courseUrl)
-		importer.setSelectDeckLambda(self.selectDeck)
+		importer.courseTitleChanged.connect(self.selectDeck)
+		importer.levelCountChanged.connect(self.setLevelCount)
+		importer.levelImported.connect(self.progressBar.setValue)
+		
 		importer.allowHTML = True
 		importer.importMode = self.importModeSelection.currentIndex()
 		importer.run()
