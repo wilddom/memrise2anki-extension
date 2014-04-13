@@ -1,163 +1,46 @@
 ﻿# -*- coding: utf-8 -*-
 
-import codecs
-import os.path
-import re
-import httplib
-import time
-import urllib
-import urllib2
-import urlparse
-import Memrise_Course_Importer.uuid
-from anki.importing import TextImporter
-from anki.importing.noteimp import NoteImporter, ForeignNote
+import memrise
 from anki.media import MediaManager
 from anki.stdmodels import addBasicModel
 from aqt import mw
 from aqt.qt import *
-from BeautifulSoup import BeautifulSoup
 from functools import partial
 
-class MemriseImporter(NoteImporter, QObject):
-	courseChanged = pyqtSignal('QString')
-	levelChanged = pyqtSignal(int, 'QString')
+class MemriseCourseLoader(QObject):
 	levelCountChanged = pyqtSignal(int)
-	levelImported = pyqtSignal(int)
+	levelLoaded = pyqtSignal(int)
+	finished = pyqtSignal()
 	
-	def __init__(self, *args):
-		NoteImporter.__init__(self, *args)
-		QObject.__init__(self)
-		
-		self.initMapping()
-
-	def fields(self):
-		"Number of fields."
-		return 2
-
-	def noteFromFields(self, fields):
-		note = ForeignNote()
-		note.fields.extend([x.strip().replace("\n", "<br>") for x in fields])
-		note.tags.extend(self.tagsToAdd)
-		return note
-
-	def loadCourseInfo(self):
-		response = urllib2.urlopen(self.file)
-		soup = BeautifulSoup(response.read())
-		title = soup.find("h1", "course-name").string.strip()
-		levelTitles = map(lambda x: x.string.strip(), soup.findAll("div", "level-title"))
-		return title, levelTitles
-
-	def getLevelUrl(self, levelNum):
-		return u"{:s}{:d}".format(self.file, levelNum)
-
-	def downloadWithRetry(self, url, tryCount):
-		if tryCount <= 0:
-			return ""
-
-		try:
-			return urllib2.urlopen(url).read()
-		except httplib.BadStatusLine:
-			# not clear why this error occurs (seemingly randomly),
-			# so I regret that all we can do is wait and retry.
-			time.sleep(0.1)
-			return self.downloadWithRetry(url, tryCount-1)
-
-	def downloadMedia(self, url):
-		# Replace links to images and audio on the Memrise servers
-		# by downloading the content to the user's media dir
-		mediaDirectoryPath = MediaManager(self.col, None).dir()
-		memrisePath = urlparse.urlparse(url).path
-		contentExtension = os.path.splitext(memrisePath)[1]
-		localName = format("%s%s" % (Memrise_Course_Importer.uuid.uuid4(), contentExtension))
-		fullMediaPath = os.path.join(mediaDirectoryPath, localName)
-		mediaFile = open(fullMediaPath, "wb")
-		mediaFile.write(urllib2.urlopen(url).read())
-		mediaFile.close()
-		return localName
+	class RunnableWrapper(QRunnable):
+		def __init__(self, task):
+			super(MemriseCourseLoader.RunnableWrapper, self).__init__()
+			self.task = task
+		def run(self):
+			self.task.run()
 	
-	def prepareText(self, content):
-		return u'{:s}'.format(content.strip())
+	def __init__(self, downloadDirectory):
+		super(MemriseCourseLoader, self).__init__()
+		self.url = ""
+		self.downloadDirectory = downloadDirectory
+		self.result = None
+		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
 	
-	def prepareAudio(self, content):
-		return u'[sound:{:s}]'.format(self.downloadMedia(content))
-	
-	def prepareImage(self, content):
-		return u'<img src="{:s}">'.format(self.downloadMedia(content))
-
-	def getNoteFromFields(self, fields, tags=[]):
-		note = ForeignNote()
-		note.fields.extend(fields)
-		note.tags.extend(tags)
-		return note
-	
-	def prepareTag(self, tag):
-		value = ''.join(x for x in tag.title() if x.isalnum())
-		if value.isdigit():
-			return ''
-		return value
-	
-	def prepareLevelTag(self, levelNum, width):
-		formatstr = u"Level{:0"+str(width)+"d}"
-		return formatstr.format(levelNum)
-
-	def getLevelNotes(self, levelNum, tags=[]):
-		levelUrl = self.getLevelUrl(levelNum)
-		soup = BeautifulSoup(self.downloadWithRetry(levelUrl, 3))
+	def load(self, url):
+		self.url = url
+		self.run()
 		
-		# this looked a lot nicer when I thought I could use BS4 (w/ css selectors)
-		# unfortunately Anki is still packaging BS3 so it's a little rougher
-		# find the words in column a, whether they be text, image or audio
-		colAParents = map(lambda x: x.find("div"), soup.findAll("div", "col_a"))
-		colA = map(lambda x: self.prepareText(x.string), filter(lambda p: p["class"] == "text", colAParents))
-		colA.extend(map(lambda x: self.prepareImage(x.find("img")["src"]), filter(lambda p: p["class"] == "image", colAParents)))
-		colA.extend(map(lambda x: self.prepareAudio(x.find("a")["href"]), filter(lambda p: p["class"] == "audio", colAParents)))
+	def start(self, url):
+		self.url = url
+		QThreadPool.globalInstance().start(self.runnable)
 		
-		# same deal for column b
-		colBParents = map(lambda x: x.find("div"), soup.findAll("div", "col_b"))
-		colB = map(lambda x: self.prepareText(x.string), filter(lambda p: p["class"] == "text", colBParents))
-		colB.extend(map(lambda x: self.prepareImage(x.find("img")["src"]), filter(lambda p: p["class"] == "image", colBParents)))
-		colB.extend(map(lambda x: self.prepareAudio(x.find("a")["href"]), filter(lambda p: p["class"] == "audio", colBParents)))
-			
-		# pair the "fronts" and "backs" of the notes up
-		# this is actually the reverse of what you might expect
-		# the content in column A on memrise is typically what you're
-		# expected to *produce*, so it goes on the back of the note
-		return map(lambda x: self.getNoteFromFields(x, tags), zip(colB, colA))
-
-	def open(self):
-		# make sure the url given actually looks like a course home url
-		if re.match('http://www.memrise.com/course/\d+/.+/', self.file) == None:
-			raise Exception("Import failed. Does your URL look like the sample URL above?")
-		return self.file
-
-	def foreignNotes(self):
-		self.open()
-			
-		courseTitle, levelTitles = self.loadCourseInfo()
-		levelCount = len(levelTitles)
-		
-		self.courseChanged.emit(courseTitle)
-		self.levelCountChanged.emit(levelCount)
-		
-		self.initMapping()
-		
-		# This looks ridiculous, sorry. Figure out how many zeroes we need
-		# to order the tags alphabetically, e.g. if there are 100+ levels
-		# we'll need to write "Level 001", "Level 002" etc.
-		zeroCount = len(str(levelCount))
-		
-		# fetch notes data for each level
-		memriseNotes = []
-		for levelNum, levelTitle in enumerate(levelTitles, start=1):
-			self.levelChanged.emit(levelNum, levelTitle)
-			tags = [self.prepareLevelTag(levelNum, zeroCount)]
-			titleTag = self.prepareTag(levelTitle)
-			if titleTag:
-				tags.append(titleTag)
-			memriseNotes.extend(self.getLevelNotes(levelNum, tags))
-			self.levelImported.emit(levelNum)
-		
-		return memriseNotes
+	def run(self):
+		course = memrise.loadCourse(self.url, self.downloadDirectory)
+		self.levelCountChanged.emit(course.levelCount)
+		for level in course:
+			self.levelLoaded.emit(level.number)
+		self.result = course
+		self.finished.emit()
 
 class MemriseImportWidget(QWidget):
 	def __init__(self):
@@ -173,38 +56,50 @@ class MemriseImportWidget(QWidget):
 		self.courseUrlLineEdit = QLineEdit()
 		self.layout.addWidget(self.courseUrlLineEdit)
 		
-		importModeSelectionLayout = QHBoxLayout()
-		self.layout.addLayout(importModeSelectionLayout)
-		self.importModeSelection = QComboBox()
-		self.importModeSelection.addItem("Update if first field matches existing note")
-		self.importModeSelection.addItem("Ignore if first field matches existing note")
-		self.importModeSelection.addItem("Import even if first field matches existing note")
-		importModeSelectionLayout.addWidget(QLabel("Select import mode"))
-		importModeSelectionLayout.addWidget(self.importModeSelection)
-		self.importModeSelection.setCurrentIndex(0)
+		self.createSubdecksCheckBox = QCheckBox("Create a subdeck per level")
+		self.layout.addWidget(self.createSubdecksCheckBox)
 		
 		patienceLabel = QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!")
 		self.layout.addWidget(patienceLabel)
 		self.importCourseButton = QPushButton("Import course")
-		self.importCourseButton.clicked.connect(self.importCourse)
+		self.importCourseButton.clicked.connect(self.loadCourse)
 		self.layout.addWidget(self.importCourseButton)
 		
 		self.progressBar = QProgressBar()
 		self.progressBar.hide()
 		self.layout.addWidget(self.progressBar)
 		
-	# not used - the MediaManager class can provide the media directory path
-	def selectMediaDirectory(self):
-		fileDialog = QFileDialog()
-		filename = fileDialog.getExistingDirectory(self, 'Select media folder')
-		self.mediaDirectoryPathLineEdit.setText(filename)
+		self.loader = MemriseCourseLoader(self.getDownloadDirectory())
+		self.loader.levelCountChanged.connect(partial(self.progressBar.setRange,0))
+		self.loader.levelLoaded.connect(self.progressBar.setValue)
+		self.loader.finished.connect(self.importCourse)
+		
+	def getDownloadDirectory(self):
+		return MediaManager(mw.col, None).dir()
+
+	def prepareTitleTag(self, tag):
+		value = ''.join(x for x in tag.title() if x.isalnum())
+		if value.isdigit():
+			return ''
+		return value
+	
+	def prepareLevelTag(self, levelNum, width):
+		formatstr = u"Level{:0"+str(width)+"d}"
+		return formatstr.format(levelNum)
+	
+	def getLevelTags(self, levelCount, level):
+		tags = [self.prepareLevelTag(level.number, len(str(levelCount)))]
+		titleTag = self.prepareTitleTag(level.title)
+		if titleTag:
+			tags.append(titleTag)
+		return tags
 	
 	def selectLevelDeck(self, levelCount, levelNum, courseTitle, levelTitle):
 		zeroCount = len(str(levelCount))
 		deckTitle = u"{:s}::Level {:s}: {:s}".format(courseTitle, str(levelNum).zfill(zeroCount), levelTitle) 
 		self.selectDeck(deckTitle)
 	
-	def selectDeck(self, deckTitle):	
+	def selectDeck(self, deckTitle):
 		# load or create Basic Note Type
 		model = mw.col.models.byName(_("Basic"))
 		if model is None:
@@ -227,34 +122,37 @@ class MemriseImportWidget(QWidget):
 		mw.col.models.setCurrent(model)
 		
 	def importCourse(self):
-		self.importCourseButton.hide()
-		self.progressBar.show()
-		self.progressBar.setValue(0)
+		course = self.loader.result
+		if not self.createSubdecksCheckBox.checkState():
+			self.selectDeck(course.title)
+		for level in course:
+			if self.createSubdecksCheckBox.checkState():
+				self.selectLevelDeck(course.levelCount, level.number, course.title, level.title)
+			tags = self.getLevelTags(course.levelCount, level)
+			for note in level.notes:
+				ankiNote = mw.col.newNote()
+				ankiNote[_("Front")] = note.front
+				ankiNote[_("Back")] = note.back
+				for tag in tags:
+					ankiNote.addTag(tag)
+				mw.col.addNote(ankiNote)
 		
-		courseUrl = self.courseUrlLineEdit.text()
-
-		# import into the collection
-		importer = MemriseImporter(mw.col, courseUrl)
-		
-		# import options
-		importer.allowHTML = True
-		importer.importMode = self.importModeSelection.currentIndex()
-		
-		# signals for deck selection/creation
-		importer.courseChanged.connect(self.selectDeck)
-		
-		# signals for progress bar
-		importer.levelCountChanged.connect(partial(self.progressBar.setRange,0))
-		importer.levelImported.connect(self.progressBar.setValue)
-		
-		importer.run()
+		mw.col.reset()
+		mw.reset()
 		
 		# refresh deck browser so user can see the newly imported deck
 		mw.deckBrowser.refresh()
 		
 		# bye!
 		self.hide()
-	
+		
+	def loadCourse(self):
+		self.importCourseButton.hide()
+		self.progressBar.show()
+		self.progressBar.setValue(0)
+		
+		courseUrl = self.courseUrlLineEdit.text()
+		self.loader.start(courseUrl)
 
 def startCourseImporter():
 	mw.memriseCourseImporter = MemriseImportWidget()
