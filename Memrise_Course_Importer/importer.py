@@ -23,8 +23,9 @@ class MemriseCourseLoader(QObject):
 		super(MemriseCourseLoader, self).__init__()
 		self.url = ""
 		self.downloadDirectory = downloadDirectory
-		self.result = None
 		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
+		self.result = None
+		self.error = False
 	
 	def load(self, url):
 		self.url = url
@@ -35,11 +36,14 @@ class MemriseCourseLoader(QObject):
 		QThreadPool.globalInstance().start(self.runnable)
 		
 	def run(self):
-		course = memrise.loadCourse(self.url, self.downloadDirectory)
-		self.levelCountChanged.emit(course.levelCount)
-		for level in course:
-			self.levelLoaded.emit(level.number)
-		self.result = course
+		try:
+			course = memrise.loadCourse(self.url, self.downloadDirectory)
+			self.levelCountChanged.emit(course.levelCount)
+			for level in course:
+				self.levelLoaded.emit(level.number)
+			self.result = course
+		except Exception as e:
+			self.error = e
 		self.finished.emit()
 
 class MemriseImportWidget(QWidget):
@@ -122,6 +126,8 @@ class MemriseImportWidget(QWidget):
 		mw.col.models.setCurrent(model)
 		
 	def importCourse(self):
+		if self.loader.error:
+			raise self.loader.error
 		course = self.loader.result
 		if not self.createSubdecksCheckBox.checkState():
 			self.selectDeck(course.title)
