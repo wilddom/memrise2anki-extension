@@ -92,7 +92,7 @@ class MemriseImportWidget(QWidget):
 		return formatstr.format(levelNum)
 	
 	def getLevelTags(self, levelCount, level):
-		tags = [self.prepareLevelTag(level.number, len(str(levelCount)))]
+		tags = [self.prepareLevelTag(level.number, max(3, len(str(levelCount))))]
 		titleTag = self.prepareTitleTag(level.title)
 		if titleTag:
 			tags.append(titleTag)
