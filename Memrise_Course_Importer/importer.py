@@ -62,6 +62,12 @@ class MemriseImportWidget(QWidget):
 		
 		self.createSubdecksCheckBox = QCheckBox("Create a subdeck per level")
 		self.layout.addWidget(self.createSubdecksCheckBox)
+		self.layout.addWidget(QLabel("Minimal level tag width filled width zeros (e.g. 3 results in Level001)"))
+		self.minimalLevelTagWidthSpinBox = QSpinBox()
+		self.minimalLevelTagWidthSpinBox.setMinimum(1)
+		self.minimalLevelTagWidthSpinBox.setMaximum(9)
+		self.minimalLevelTagWidthSpinBox.setValue(3)
+		self.layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
 		patienceLabel = QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!")
 		self.layout.addWidget(patienceLabel)
@@ -92,7 +98,7 @@ class MemriseImportWidget(QWidget):
 		return formatstr.format(levelNum)
 	
 	def getLevelTags(self, levelCount, level):
-		tags = [self.prepareLevelTag(level.number, max(3, len(str(levelCount))))]
+		tags = [self.prepareLevelTag(level.number, max(self.minimalLevelTagWidthSpinBox.value(), len(str(levelCount))))]
 		titleTag = self.prepareTitleTag(level.title)
 		if titleTag:
 			tags.append(titleTag)
@@ -137,8 +143,14 @@ class MemriseImportWidget(QWidget):
 			tags = self.getLevelTags(course.levelCount, level)
 			for note in level.notes:
 				ankiNote = mw.col.newNote()
-				ankiNote[_("Front")] = note.front
-				ankiNote[_("Back")] = note.back
+				front = "Front"
+				if not front in ankiNote.keys():
+					front = _(front)
+				ankiNote[front] = note.front
+				back = "Back"
+				if not back in ankiNote.keys():
+					back = _(back)
+				ankiNote[back] = note.back
 				for tag in tags:
 					ankiNote.addTag(tag)
 				mw.col.addNote(ankiNote)
