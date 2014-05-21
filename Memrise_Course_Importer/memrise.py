@@ -1,10 +1,6 @@
-import urllib2, httplib, urlparse, re, time, os.path 
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path
 import uuid
 import BeautifulSoup
-
-def loadCourse(url, downloadDirectory):
-    service = Service(downloadDirectory)
-    return service.loadCourse(url)
 
 class Note(object):
     def __init__(self, front="", back=""):
@@ -45,12 +41,15 @@ class Course(object):
         return self.levelCount
 
 class Service(object):
-    def __init__(self, downloadDirectory = None):
+    def __init__(self, downloadDirectory=None, cookiejar=None):
         self.downloadDirectory = downloadDirectory
+        if cookiejar is None:
+            cookiejar = cookielib.CookieJar()
+        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar))
     
     def downloadWithRetry(self, url, tryCount):
         try:
-            return urllib2.urlopen(url)
+            return self.opener.open(url)
         except httplib.BadStatusLine:
             # not clear why this error occurs (seemingly randomly),
             # so I regret that all we can do is wait and retry.
@@ -59,6 +58,26 @@ class Service(object):
                 return self.downloadWithRetry(url, tryCount-1)
             else:
                 raise
+    
+    def isLoggedIn(self):
+        response = self.opener.open('http://www.memrise.com/login/')
+        return response.geturl() == 'http://www.memrise.com/home/'
+        
+    def login(self, username, password):
+        response = self.opener.open('http://www.memrise.com/login/')
+        soup = BeautifulSoup.BeautifulSoup(response.read())
+        form = soup.find("form", attrs={"action": '/login/'})
+        fields = {}
+        for field in form.findAll("input"):
+            if field.has_key('name'):
+                if field.has_key('value'):
+                    fields[field['name']] = field['value']
+                else:
+                    fields[field['name']] = ""
+        fields['username'] = username
+        fields['password'] = password
+        response = self.opener.open('http://www.memrise.com/login/', urllib.urlencode(fields))
+        return response.geturl() == 'http://www.memrise.com/home/'
     
     def loadCourse(self, url):
         url = self.checkCourseUrl(url)
@@ -95,7 +114,7 @@ class Service(object):
         localName = "{:s}{:s}".format(uuid.uuid4(), contentExtension)
         fullMediaPath = os.path.join(self.downloadDirectory, localName)
         mediaFile = open(fullMediaPath, "wb")
-        mediaFile.write(urllib2.urlopen(url).read())
+        mediaFile.write(self.downloadWithRetry(url, 3).read())
         mediaFile.close()
         return localName
     
@@ -109,7 +128,7 @@ class Service(object):
         return u'<img src="{:s}">'.format(self.downloadMedia(content))
 
     def loadLevelNotes(self, url):
-        soup = BeautifulSoup.BeautifulSoup(self.downloadWithRetry(url, 3))
+        soup = BeautifulSoup.BeautifulSoup(self.downloadWithRetry(url, 3).read())
     
         # this looked a lot nicer when I thought I could use BS4 (w/ css selectors)
         # unfortunately Anki is still packaging BS3 so it's a little rougher

@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 
-import memrise
+import memrise, cookielib, os.path
 from anki.media import MediaManager
 from anki.stdmodels import addBasicModel
 from aqt import mw
@@ -19,10 +19,10 @@ class MemriseCourseLoader(QObject):
 		def run(self):
 			self.task.run()
 	
-	def __init__(self, downloadDirectory):
+	def __init__(self, memriseService):
 		super(MemriseCourseLoader, self).__init__()
+		self.memriseService = memriseService
 		self.url = ""
-		self.downloadDirectory = downloadDirectory
 		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
 		self.result = None
 		self.error = False
@@ -37,7 +37,7 @@ class MemriseCourseLoader(QObject):
 		
 	def run(self):
 		try:
-			course = memrise.loadCourse(self.url, self.downloadDirectory)
+			course = self.memriseService.loadCourse(self.url)
 			self.levelCountChanged.emit(course.levelCount)
 			for level in course:
 				self.levelLoaded.emit(level.number)
@@ -46,8 +46,53 @@ class MemriseCourseLoader(QObject):
 			self.error = e
 		self.finished.emit()
 
+class MemriseLoginDialog(QDialog):
+	def __init__(self, memriseService):
+		super(MemriseLoginDialog, self).__init__()
+		self.memriseService = memriseService
+		
+		self.setWindowTitle("Memrise Login")
+		
+		layout = QVBoxLayout(self)
+		
+		innerLayout = QGridLayout()
+		
+		innerLayout.addWidget(QLabel("Username:"),0,0)
+		self.usernameLineEdit = QLineEdit()
+		innerLayout.addWidget(self.usernameLineEdit,0,1)
+		
+		innerLayout.addWidget(QLabel("Password:"),1,0)
+		self.passwordLineEdit = QLineEdit()
+		self.passwordLineEdit.setEchoMode(QLineEdit.Password)
+		innerLayout.addWidget(self.passwordLineEdit,1,1)
+		
+		layout.addLayout(innerLayout)
+		
+		buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
+		buttons.accepted.connect(self.accept)
+		buttons.rejected.connect(self.reject)
+		layout.addWidget(buttons)
+	
+	def accept(self):
+		if self.memriseService.login(self.usernameLineEdit.text(),self.passwordLineEdit.text()):
+			super(MemriseLoginDialog, self).accept()
+		else:
+			msgBox = QMessageBox()
+			msgBox.setWindowTitle("Login")
+			msgBox.setText("Invalid credentials")
+			msgBox.exec_();
+		
+	def reject(self):
+		super(MemriseLoginDialog, self).reject()
+
+	
+	@staticmethod
+	def login(memriseService):
+		dialog = MemriseLoginDialog(memriseService)
+		return dialog.exec_() == QDialog.Accepted
+
 class MemriseImportWidget(QWidget):
-	def __init__(self):
+	def __init__(self, memriseService):
 		super(MemriseImportWidget, self).__init__()
 
 		# set up the UI, basically
@@ -79,13 +124,10 @@ class MemriseImportWidget(QWidget):
 		self.progressBar.hide()
 		self.layout.addWidget(self.progressBar)
 		
-		self.loader = MemriseCourseLoader(self.getDownloadDirectory())
+		self.loader = MemriseCourseLoader(memriseService)
 		self.loader.levelCountChanged.connect(partial(self.progressBar.setRange,0))
 		self.loader.levelLoaded.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
-		
-	def getDownloadDirectory(self):
-		return MediaManager(mw.col, None).dir()
 
 	def prepareTitleTag(self, tag):
 		value = ''.join(x for x in tag.title() if x.isalnum())
@@ -133,7 +175,10 @@ class MemriseImportWidget(QWidget):
 		
 	def importCourse(self):
 		if self.loader.error:
+			self.importCourseButton.show()
+			self.progressBar.hide()
 			raise self.loader.error
+		
 		course = self.loader.result
 		if not self.createSubdecksCheckBox.checkState():
 			self.selectDeck(course.title)
@@ -173,8 +218,17 @@ class MemriseImportWidget(QWidget):
 		self.loader.start(courseUrl)
 
 def startCourseImporter():
-	mw.memriseCourseImporter = MemriseImportWidget()
-	mw.memriseCourseImporter.show()
+	downloadDirectory = MediaManager(mw.col, None).dir()
+	cookiefilename = os.path.join(mw.pm.profileFolder(), 'memrise.cookies')
+	cookiejar = cookielib.MozillaCookieJar(cookiefilename)
+	if os.path.isfile(cookiefilename):
+		cookiejar.load()
+	memriseService = memrise.Service(downloadDirectory, cookiejar)
+	if memriseService.isLoggedIn() or MemriseLoginDialog.login(memriseService):
+		cookiejar.save()
+		global memriseCourseImporter
+		memriseCourseImporter = MemriseImportWidget(memriseService)
+		memriseCourseImporter.show()
 
 action = QAction("Import Memrise Course...", mw)
 mw.connect(action, SIGNAL("triggered()"), startCourseImporter)
