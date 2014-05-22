@@ -35,6 +35,16 @@ class MemriseCourseLoader(QObject):
 		self.url = url
 		QThreadPool.globalInstance().start(self.runnable)
 		
+	
+	def getResult(self):
+		return self.result
+	
+	def getError(self):
+		return self.error
+	
+	def isError(self):
+		return isinstance(self.error, Exception)
+	
 	def run(self):
 		try:
 			course = self.memriseService.loadCourse(self.url)
@@ -91,38 +101,38 @@ class MemriseLoginDialog(QDialog):
 		dialog = MemriseLoginDialog(memriseService)
 		return dialog.exec_() == QDialog.Accepted
 
-class MemriseImportWidget(QWidget):
+class MemriseImportDialog(QDialog):
 	def __init__(self, memriseService):
-		super(MemriseImportWidget, self).__init__()
+		super(MemriseImportDialog, self).__init__()
 
 		# set up the UI, basically
 		self.setWindowTitle("Import Memrise Course")
-		self.layout = QVBoxLayout(self)
+		layout = QVBoxLayout(self)
 		
-		label = QLabel("Enter the home URL of the Memrise course to import\n(e.g. http://www.memrise.com/course/77958/memrise-intro-french/):")
-		self.layout.addWidget(label)
+		layout.addWidget(QLabel("Enter the home URL of the Memrise course to import\n(e.g. http://www.memrise.com/course/77958/memrise-intro-french/):"))
 		
 		self.courseUrlLineEdit = QLineEdit()
-		self.layout.addWidget(self.courseUrlLineEdit)
+		layout.addWidget(self.courseUrlLineEdit)
 		
 		self.createSubdecksCheckBox = QCheckBox("Create a subdeck per level")
-		self.layout.addWidget(self.createSubdecksCheckBox)
-		self.layout.addWidget(QLabel("Minimal level tag width filled width zeros (e.g. 3 results in Level001)"))
+		layout.addWidget(self.createSubdecksCheckBox)
+		layout.addWidget(QLabel("Minimal level tag width filled width zeros (e.g. 3 results in Level001)"))
 		self.minimalLevelTagWidthSpinBox = QSpinBox()
 		self.minimalLevelTagWidthSpinBox.setMinimum(1)
 		self.minimalLevelTagWidthSpinBox.setMaximum(9)
 		self.minimalLevelTagWidthSpinBox.setValue(3)
-		self.layout.addWidget(self.minimalLevelTagWidthSpinBox)
+		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
-		patienceLabel = QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!")
-		self.layout.addWidget(patienceLabel)
-		self.importCourseButton = QPushButton("Import course")
-		self.importCourseButton.clicked.connect(self.loadCourse)
-		self.layout.addWidget(self.importCourseButton)
+		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
+		
+		self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
+		self.buttons.accepted.connect(self.loadCourse)
+		self.buttons.rejected.connect(self.reject)
+		layout.addWidget(self.buttons)
 		
 		self.progressBar = QProgressBar()
 		self.progressBar.hide()
-		self.layout.addWidget(self.progressBar)
+		layout.addWidget(self.progressBar)
 		
 		self.loader = MemriseCourseLoader(memriseService)
 		self.loader.levelCountChanged.connect(partial(self.progressBar.setRange,0))
@@ -174,12 +184,12 @@ class MemriseImportWidget(QWidget):
 		mw.col.models.setCurrent(model)
 		
 	def importCourse(self):
-		if self.loader.error:
-			self.importCourseButton.show()
+		if self.loader.isError():
+			self.buttons.show()
 			self.progressBar.hide()
-			raise self.loader.error
+			raise self.loader.getError()
 		
-		course = self.loader.result
+		course = self.loader.getResult()
 		if not self.createSubdecksCheckBox.checkState():
 			self.selectDeck(course.title)
 		for level in course:
@@ -206,11 +216,10 @@ class MemriseImportWidget(QWidget):
 		# refresh deck browser so user can see the newly imported deck
 		mw.deckBrowser.refresh()
 		
-		# bye!
-		self.hide()
+		self.accept()
 		
 	def loadCourse(self):
-		self.importCourseButton.hide()
+		self.buttons.hide()
 		self.progressBar.show()
 		self.progressBar.setValue(0)
 		
@@ -226,9 +235,8 @@ def startCourseImporter():
 	memriseService = memrise.Service(downloadDirectory, cookiejar)
 	if memriseService.isLoggedIn() or MemriseLoginDialog.login(memriseService):
 		cookiejar.save()
-		global memriseCourseImporter
-		memriseCourseImporter = MemriseImportWidget(memriseService)
-		memriseCourseImporter.show()
+		memriseCourseImporter = MemriseImportDialog(memriseService)
+		memriseCourseImporter.exec_()
 
 action = QAction("Import Memrise Course...", mw)
 mw.connect(action, SIGNAL("triggered()"), startCourseImporter)
