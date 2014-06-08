@@ -8,8 +8,8 @@ from aqt.qt import *
 from functools import partial
 
 class MemriseCourseLoader(QObject):
-	levelCountChanged = pyqtSignal(int)
-	levelLoaded = pyqtSignal(int)
+	totalCountChanged = pyqtSignal(int)
+	totalLoadedChanged = pyqtSignal(int)
 	finished = pyqtSignal()
 	
 	class RunnableWrapper(QRunnable):
@@ -18,6 +18,40 @@ class MemriseCourseLoader(QObject):
 			self.task = task
 		def run(self):
 			self.task.run()
+			
+	class Observer(object):
+		def __init__(self, sender):
+			self.sender = sender
+			self.totalCount = 0
+			self.totalLoaded = 0
+		
+		def levelLoaded(self, levelIndex, level=None):
+			self.totalLoaded += 1
+			self.sender.totalLoadedChanged.emit(self.totalLoaded)
+			
+		def downloadMedia(self, thing):
+			thing.imageUrls = map(self.sender.memriseService.downloadMedia, thing.imageUrls)
+			thing.audioUrls = map(self.sender.memriseService.downloadMedia, thing.audioUrls)
+			
+		def thingLoaded(self, thing):
+			if thing and self.sender.downloadMedia:
+				self.downloadMedia(thing)
+			self.totalLoaded += 1
+			self.sender.totalLoadedChanged.emit(self.totalLoaded)
+		
+		def levelCountChanged(self, levelCount):
+			self.totalCount += levelCount
+			self.sender.totalCountChanged.emit(self.totalCount)
+			
+		def thingCountChanged(self, thingCount):
+			self.totalCount += thingCount
+			self.sender.totalCountChanged.emit(self.totalCount)
+		
+		def __getattr__(self, attr):
+			if hasattr(self.sender, attr):
+				signal = getattr(self.sender, attr)
+				if hasattr(signal, 'emit'):
+					return getattr(signal, 'emit')
 	
 	def __init__(self, memriseService):
 		super(MemriseCourseLoader, self).__init__()
@@ -26,6 +60,7 @@ class MemriseCourseLoader(QObject):
 		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
 		self.result = None
 		self.error = False
+		self.downloadMedia = True
 	
 	def load(self, url):
 		self.url = url
@@ -34,7 +69,6 @@ class MemriseCourseLoader(QObject):
 	def start(self, url):
 		self.url = url
 		QThreadPool.globalInstance().start(self.runnable)
-		
 	
 	def getResult(self):
 		return self.result
@@ -47,10 +81,7 @@ class MemriseCourseLoader(QObject):
 	
 	def run(self):
 		try:
-			course = self.memriseService.loadCourse(self.url)
-			self.levelCountChanged.emit(course.levelCount)
-			for level in course:
-				self.levelLoaded.emit(level.number)
+			course = self.memriseService.loadCourse(self.url, MemriseCourseLoader.Observer(self))
 			self.result = course
 		except Exception as e:
 			self.error = e
@@ -123,6 +154,10 @@ class MemriseImportDialog(QDialog):
 		self.minimalLevelTagWidthSpinBox.setValue(3)
 		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
+		self.downloadMediaCheckBox = QCheckBox("Download media files")
+		self.downloadMediaCheckBox.setChecked(True)
+		layout.addWidget(self.downloadMediaCheckBox)
+		
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
 		
 		self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
@@ -135,8 +170,8 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(self.progressBar)
 		
 		self.loader = MemriseCourseLoader(memriseService)
-		self.loader.levelCountChanged.connect(partial(self.progressBar.setRange,0))
-		self.loader.levelLoaded.connect(self.progressBar.setValue)
+		self.loader.totalCountChanged.connect(partial(self.progressBar.setRange,0))
+		self.loader.totalLoadedChanged.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
 
 	def prepareTitleTag(self, tag):
@@ -150,7 +185,7 @@ class MemriseImportDialog(QDialog):
 		return formatstr.format(levelNum)
 	
 	def getLevelTags(self, levelCount, level):
-		tags = [self.prepareLevelTag(level.number, max(self.minimalLevelTagWidthSpinBox.value(), len(str(levelCount))))]
+		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(str(levelCount))))]
 		titleTag = self.prepareTitleTag(level.title)
 		if titleTag:
 			tags.append(titleTag)
@@ -182,7 +217,19 @@ class MemriseImportDialog(QDialog):
 		# select deck and model
 		mw.col.decks.select(did)
 		mw.col.models.setCurrent(model)
-		
+	
+	@staticmethod
+	def prepareText(content):
+		return u'{:s}'.format(content.strip())
+	
+	@staticmethod
+	def prepareAudio(content):
+		return u'[sound:{:s}]'.format(content)
+	
+	@staticmethod
+	def prepareImage(content):
+		return u'<img src="{:s}">'.format(content)
+	
 	def importCourse(self):
 		if self.loader.isError():
 			self.buttons.show()
@@ -190,25 +237,41 @@ class MemriseImportDialog(QDialog):
 			raise self.loader.getError()
 		
 		course = self.loader.getResult()
-		if not self.createSubdecksCheckBox.checkState():
-			self.selectDeck(course.title)
+		
+		noteCache = {}
+		
+		if not self.createSubdecksCheckBox.isChecked():
+			self.selectDeck(course.title)		
 		for level in course:
-			if self.createSubdecksCheckBox.checkState():
-				self.selectLevelDeck(course.levelCount, level.number, course.title, level.title)
-			tags = self.getLevelTags(course.levelCount, level)
-			for note in level.notes:
-				ankiNote = mw.col.newNote()
-				front = "Front"
-				if not front in ankiNote.keys():
-					front = _(front)
-				ankiNote[front] = note.front
-				back = "Back"
-				if not back in ankiNote.keys():
-					back = _(back)
-				ankiNote[back] = note.back
+			if self.createSubdecksCheckBox.isChecked():
+				self.selectLevelDeck(len(course), level.index, course.title, level.title)
+			tags = self.getLevelTags(len(course), level)
+			for thing in level:
+				if thing.id in noteCache:
+					ankiNote = noteCache[thing.id]
+				else:
+					ankiNote = mw.col.newNote()
+					front = "Front"
+					if not front in ankiNote.keys():
+						front = _(front)
+					ankiNote[front] = thing.word
+					back = "Back"
+					if not back in ankiNote.keys():
+						back = _(back)
+					content = map(self.prepareText, thing.definitions)
+					if self.downloadMediaCheckBox.isChecked():
+						content += map(self.prepareImage, thing.imageUrls)
+						content += map(self.prepareAudio, thing.audioUrls)
+					ankiNote[back] = u"<br/>".join(content)
+					
 				for tag in tags:
 					ankiNote.addTag(tag)
-				mw.col.addNote(ankiNote)
+					
+				if thing.id in noteCache:
+					ankiNote.flush()
+				else:
+					mw.col.addNote(ankiNote)
+					noteCache[thing.id] = ankiNote
 		
 		mw.col.reset()
 		mw.reset()
@@ -224,6 +287,7 @@ class MemriseImportDialog(QDialog):
 		self.progressBar.setValue(0)
 		
 		courseUrl = self.courseUrlLineEdit.text()
+		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
 		self.loader.start(courseUrl)
 
 def startCourseImporter():

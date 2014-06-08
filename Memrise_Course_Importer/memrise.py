@@ -1,44 +1,157 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json
 import uuid
 import BeautifulSoup
 
-class Note(object):
-    def __init__(self, front="", back=""):
-        self.front = front
-        self.back = back
+class Thing(object):
+    def __init__(self, thingId):
+        self.id = thingId
+        self.word = ""
+        self.definitions = []
+        self.audioUrls = []
+        self.imageUrls = []
 
 class Level(object):
-    def __init__(self):
-        self.url = ""
-        self.number = 0
+    def __init__(self, levelId):
+        self.id = levelId
+        self.index = 0
         self.title = ""
-        self.notes = []
+        self.things = []
+        
+    def __iter__(self):
+        for thing in self.things:
+            yield thing
+                
+    def __len__(self):
+        return len(self.things)
 
 class Course(object):
-    def __init__(self, service):
-        self.service = service
-        self.url = ""
+    def __init__(self, courseId):
+        self.id = courseId
         self.title = ""
-        self.levelCount = 0
-        self.levelTitles = []
+        self.description = ""
+        self.source = ""
+        self.target = ""
         self.levels = []
 
     def __iter__(self):
-        if len(self.levels) == self.levelCount:
-            for level in self.levels:
-                yield level
-        else:
-            for levelNumber, levelTitle in enumerate(self.levelTitles, start=1):
-                level = Level()
-                level.url = self.service.getLevelUrl(self.url, levelNumber)
-                level.number = levelNumber
-                level.title = levelTitle
-                level.notes = self.service.loadLevelNotes(level.url)
-                self.levels.append(level)
-                yield level
+        for level in self.levels:
+            yield level
                 
     def __len__(self):
-        return self.levelCount
+        return len(self.levels)
+
+class ColumnHelper(object):
+    def __init__(self, columnData):
+        self.firstTextColumnIndex = None
+        self.otherTextColumnIndices = []
+        self.audioColumnIndices = []
+        self.imageColumnIndices = []
+        
+        for index, column in columnData.items():
+            if (column["kind"] == "text"):
+                if self.firstTextColumnIndex is None:
+                    self.firstTextColumnIndex = index
+                else:
+                    self.otherTextColumnIndices.append(index)
+            elif (column["kind"] == "audio"):
+                self.audioColumnIndices.append(index)
+            elif (column["kind"] == "image"):
+                self.imageColumnIndices.append(index)
+        
+    def getWord(self, thingData):
+        return thingData["columns"][self.firstTextColumnIndex]["val"]
+        
+    def getDefinitions(self, thingData):
+        data = []
+        for index in self.otherTextColumnIndices:
+            value = thingData["columns"][index]["val"]
+            if value:
+                data.append(value)
+        return data
+    
+    @staticmethod
+    def loadMediaColumns(indices, thingData):
+        data = []
+        for index in indices:
+            values = thingData["columns"][index]["val"]
+            for value in values:
+                url = value["url"]
+                if url:
+                    data.append(url)
+        return data
+    
+    def getAudioUrls(self, thingData):
+        return self.loadMediaColumns(self.audioColumnIndices, thingData)
+    
+    def getImageUrls(self, thingData):
+        return self.loadMediaColumns(self.imageColumnIndices, thingData)
+
+class CourseLoader(object):
+    def __init__(self, service):
+        self.service = service
+        self.observers = []
+        self.levelCount = 0
+        self.thingCount = 0
+    
+    def registerObserver(self, observer):
+        self.observers.append(observer)
+        
+    def notify(self, signal, *attrs, **kwargs):
+        for observer in self.observers:
+            if hasattr(observer, signal):
+                getattr(observer, signal)(*attrs, **kwargs)
+        
+    def loadCourse(self, courseId):
+        self.course = Course(courseId)
+        
+        levelUrl = self.service.getJsonLevelUrl(self.course.id, 1)
+        response = self.service.downloadWithRetry(levelUrl, 3)
+        levelData = json.load(response)
+        
+        self.course.title = levelData["session"]["course"]["name"]
+        self.course.description = levelData["session"]["course"]["description"]
+        self.course.source = levelData["session"]["course"]["source"]["name"]
+        self.course.target = levelData["session"]["course"]["target"]["name"]
+        self.levelCount = levelData["session"]["course"]["num_levels"]
+        self.thingCount = levelData["session"]["course"]["num_things"]
+        
+        self.notify('levelCountChanged', self.levelCount)
+        self.notify('thingCountChanged', self.thingCount)
+        
+        for levelIndex in range(1,self.levelCount+1):
+            level = self.loadLevel(levelIndex)
+            if level:
+                self.course.levels.append(level)
+            self.notify('levelLoaded', levelIndex, level)
+        
+        return self.course
+    
+    def loadLevel(self, levelIndex):
+        levelUrl = self.service.getJsonLevelUrl(self.course.id, levelIndex)
+        response = self.service.downloadWithRetry(levelUrl, 3)
+        levelData = json.load(response)
+        
+        if levelData["success"] == False:
+            return None
+        
+        level = Level(levelData["session"]["level"]["id"])
+        level.index = levelData["session"]["level"]["index"]
+        level.title = levelData["session"]["level"]["title"]
+        poolId = levelData["session"]["level"]["pool_id"]
+        
+        columnData = levelData["pools"][unicode(poolId)]["columns"]
+        columnHelper = ColumnHelper(columnData)
+        
+        for thingId, thingData in levelData["things"].items():
+            thing = Thing(thingId)
+            thing.word = columnHelper.getWord(thingData)
+            thing.definitions = columnHelper.getDefinitions(thingData)
+            thing.audioUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getAudioUrls(thingData))
+            thing.imageUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getImageUrls(thingData))
+            level.things.append(thing)
+            self.notify('thingLoaded', thing)
+        
+        return level
 
 class Service(object):
     def __init__(self, downloadDirectory=None, cookiejar=None):
@@ -79,29 +192,32 @@ class Service(object):
         response = self.opener.open('http://www.memrise.com/login/', urllib.urlencode(fields))
         return response.geturl() == 'http://www.memrise.com/home/'
     
-    def loadCourse(self, url):
-        url = self.checkCourseUrl(url)
-        
-        response = self.downloadWithRetry(url, 3)
-        soup = BeautifulSoup.BeautifulSoup(response.read())
-        
-        course = Course(self)
-        course.url = url
-        course.title = soup.find("h1", "course-name").string.strip()
-        course.levelTitles = map(lambda x: x.string.strip(), soup.findAll("div", "level-title"))
-        course.levelCount = len(course.levelTitles)
-        
-        return course
-
-    def checkCourseUrl(self, url):
-        # make sure the url given actually looks like a course home url
-        if re.match('http://www.memrise.com/course/\d+/.+/', url) == None:
+    def loadCourse(self, url, observer=None):
+        courseLoader = CourseLoader(self)
+        if not observer is None:
+            courseLoader.registerObserver(observer)
+        return courseLoader.loadCourse(self.getCourseIdFromUrl(url))
+    
+    @staticmethod
+    def getCourseIdFromUrl(url):
+        match = re.match('http://www.memrise.com/course/(\d+)/.+/', url)
+        if not match:
             raise Exception("Import failed. Does your URL look like the sample URL above?")
-        return url
+        return int(match.group(1))
 
-    def getLevelUrl(self, courseUrl, levelNum):
-        courseUrl = self.checkCourseUrl(courseUrl)
+    @staticmethod
+    def getHtmlLevelUrl(courseUrl, levelNum):
+        if not re.match('http://www.memrise.com/course/\d+/.+/', courseUrl):
+            raise Exception("Import failed. Does your URL look like the sample URL above?")
         return u"{:s}{:d}".format(courseUrl, levelNum)
+    
+    @staticmethod
+    def getJsonLevelUrl(courseId, levelIndex):
+        return u"http://www.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
+    
+    @staticmethod
+    def toAbsoluteMediaUrl(url):
+        return urlparse.urljoin(u"http://static.memrise.com/", url)
     
     def downloadMedia(self, url):
         if not self.downloadDirectory:
@@ -111,45 +227,10 @@ class Service(object):
         # by downloading the content to the user's media dir
         memrisePath = urlparse.urlparse(url).path
         contentExtension = os.path.splitext(memrisePath)[1]
-        localName = "{:s}{:s}".format(uuid.uuid4(), contentExtension)
+        localName = "{:s}{:s}".format(uuid.uuid5(uuid.NAMESPACE_URL, url.encode('utf-8')), contentExtension)
         fullMediaPath = os.path.join(self.downloadDirectory, localName)
         mediaFile = open(fullMediaPath, "wb")
         mediaFile.write(self.downloadWithRetry(url, 3).read())
         mediaFile.close()
         return localName
-    
-    def prepareText(self, content):
-        return u'{:s}'.format(content.strip())
-    
-    def prepareAudio(self, content):
-        return u'[sound:{:s}]'.format(self.downloadMedia(content))
-    
-    def prepareImage(self, content):
-        return u'<img src="{:s}">'.format(self.downloadMedia(content))
-
-    def loadLevelNotes(self, url):
-        soup = BeautifulSoup.BeautifulSoup(self.downloadWithRetry(url, 3).read())
-    
-        # this looked a lot nicer when I thought I could use BS4 (w/ css selectors)
-        # unfortunately Anki is still packaging BS3 so it's a little rougher
-        # find the words in column a, whether they be text, image or audio
-        colAParents = map(lambda x: x.find("div"), soup.findAll("div", "col_a"))
-        colA = map(lambda x: self.prepareText(x.string), filter(lambda p: p["class"] == "text", colAParents))
-        colA.extend(map(lambda x: self.prepareImage(x.find("img")["src"]), filter(lambda p: p["class"] == "image", colAParents)))
-        colA.extend(map(lambda x: self.prepareAudio(x.find("a")["href"]), filter(lambda p: p["class"] == "audio", colAParents)))
-        
-        # same deal for column b
-        colBParents = map(lambda x: x.find("div"), soup.findAll("div", "col_b"))
-        colB = map(lambda x: self.prepareText(x.string), filter(lambda p: p["class"] == "text", colBParents))
-        colB.extend(map(lambda x: self.prepareImage(x.find("img")["src"]), filter(lambda p: p["class"] == "image", colBParents)))
-        colB.extend(map(lambda x: self.prepareAudio(x.find("a")["href"]), filter(lambda p: p["class"] == "audio", colBParents)))
-        
-        # pair the "fronts" and "backs" of the notes up
-        # this is actually the reverse of what you might expect
-        # the content in column A on memrise is typically what you're
-        # expected to *produce*, so it goes on the back of the note
-        notes = []
-        for a, b in zip(colA, colB):
-            notes.append(Note(front=b, back=a))
-        return notes
 
