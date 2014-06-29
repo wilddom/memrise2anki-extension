@@ -5,8 +5,10 @@ import BeautifulSoup
 class Thing(object):
     def __init__(self, thingId):
         self.id = thingId
-        self.word = ""
-        self.definitions = []
+        self.target = []
+        self.targetAlternatives = []
+        self.source = []
+        self.sourceAlternatives = []
         self.audioUrls = []
         self.imageUrls = []
 
@@ -58,16 +60,33 @@ class ColumnHelper(object):
             elif (column["kind"] == "image"):
                 self.imageColumnIndices.append(index)
         
-    def getWord(self, thingData):
+    def getTargetDefinition(self, thingData):
         return thingData["columns"][self.firstTextColumnIndex]["val"]
         
-    def getDefinitions(self, thingData):
+    def getTargetAlternatives(self, thingData):
+        alternatives = []
+        for alt in thingData["columns"][self.firstTextColumnIndex]["alts"]:
+            value = alt['val']
+            if value:
+                alternatives.append(value)
+        return alternatives
+        
+    def getSourceDefinitions(self, thingData):
         data = []
         for index in self.otherTextColumnIndices:
             value = thingData["columns"][index]["val"]
             if value:
                 data.append(value)
         return data
+    
+    def getSourceAlternatives(self, thingData):
+        alternatives = []
+        for index in self.otherTextColumnIndices:
+            for alt in thingData["columns"][index]["alts"]:
+                value = alt['val']
+                if value:
+                    alternatives.append(value)
+        return alternatives
     
     @staticmethod
     def loadMediaColumns(indices, thingData):
@@ -144,8 +163,10 @@ class CourseLoader(object):
         
         for thingId, thingData in levelData["things"].items():
             thing = Thing(thingId)
-            thing.word = columnHelper.getWord(thingData)
-            thing.definitions = columnHelper.getDefinitions(thingData)
+            thing.target = [columnHelper.getTargetDefinition(thingData)]
+            thing.source = columnHelper.getSourceDefinitions(thingData)
+            thing.targetAlternatives = columnHelper.getTargetAlternatives(thingData)
+            thing.sourceAlternatives = columnHelper.getSourceAlternatives(thingData)
             thing.audioUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getAudioUrls(thingData))
             thing.imageUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getImageUrls(thingData))
             level.things.append(thing)

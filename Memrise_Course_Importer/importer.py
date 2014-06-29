@@ -1,8 +1,7 @@
 ﻿# -*- coding: utf-8 -*-
 
-import memrise, cookielib, os.path
+import memrise, cookielib, os.path, uuid
 from anki.media import MediaManager
-from anki.stdmodels import addBasicModel
 from aqt import mw
 from aqt.qt import *
 from functools import partial
@@ -145,18 +144,24 @@ class MemriseImportDialog(QDialog):
 		self.courseUrlLineEdit = QLineEdit()
 		layout.addWidget(self.courseUrlLineEdit)
 		
-		self.createSubdecksCheckBox = QCheckBox("Create a subdeck per level")
-		layout.addWidget(self.createSubdecksCheckBox)
-		layout.addWidget(QLabel("Minimal level tag width filled width zeros (e.g. 3 results in Level001)"))
+		layout.addWidget(QLabel("Minimal level tag width filled width zeros (e.g. 3 results in Level001):"))
 		self.minimalLevelTagWidthSpinBox = QSpinBox()
 		self.minimalLevelTagWidthSpinBox.setMinimum(1)
 		self.minimalLevelTagWidthSpinBox.setMaximum(9)
-		self.minimalLevelTagWidthSpinBox.setValue(3)
+		self.minimalLevelTagWidthSpinBox.setValue(2)
 		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		self.downloadMediaCheckBox.setChecked(True)
 		layout.addWidget(self.downloadMediaCheckBox)
+		
+		self.deckSelection = QComboBox()
+		self.deckSelection.addItem("")
+		for name in mw.col.decks.allNames(dyn=False):
+			self.deckSelection.addItem(name)
+		self.deckSelection.setCurrentIndex(0)
+		layout.addWidget(QLabel("Merge with existing deck:"))
+		layout.addWidget(self.deckSelection)
 		
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
 		
@@ -190,34 +195,7 @@ class MemriseImportDialog(QDialog):
 		if titleTag:
 			tags.append(titleTag)
 		return tags
-	
-	def selectLevelDeck(self, levelCount, levelNum, courseTitle, levelTitle):
-		zeroCount = len(str(levelCount))
-		deckTitle = u"{:s}::Level {:s}: {:s}".format(courseTitle, str(levelNum).zfill(zeroCount), levelTitle) 
-		self.selectDeck(deckTitle)
-	
-	def selectDeck(self, deckTitle):
-		# load or create Basic Note Type
-		model = mw.col.models.byName(_("Basic"))
-		if model is None:
-			model = mw.col.models.byName("Basic")
-		if model is None:
-			model = addBasicModel(mw.col)
 		
-		# create deck and set note type
-		did = mw.col.decks.id(deckTitle)
-		deck = mw.col.decks.get(did)
-		deck['mid'] = model['id']
-		mw.col.decks.save(deck)
-		
-		# assign new deck to custom model
-		model["did"] = deck["id"]
-		mw.col.models.save(model)
-		
-		# select deck and model
-		mw.col.decks.select(did)
-		mw.col.models.setCurrent(model)
-	
 	@staticmethod
 	def prepareText(content):
 		return u'{:s}'.format(content.strip())
@@ -230,6 +208,112 @@ class MemriseImportDialog(QDialog):
 	def prepareImage(content):
 		return u'<img src="{:s}">'.format(content)
 	
+	@staticmethod
+	def camelize(content):
+		return ''.join(x for x in content.title() if x.isalpha())
+	
+	def createMemriseModel(self, col, course):
+		mm = col.models
+				
+		name = "Memrise {}".format(self.camelize(course.title))
+		m = mm.new(name)
+		
+		source = self.camelize(course.source) or _("Front")
+		fm = mm.newField(source)
+		mm.addField(m, fm)
+		
+		target = self.camelize(course.target) or _("Back")
+		fm = mm.newField(target)
+		mm.addField(m, fm)
+		
+		fm = mm.newField("{} {}".format(source, _("Alternatives")))
+		mm.addField(m, fm)
+		
+		fm = mm.newField("{} {}".format(target, _("Alternatives")))
+		mm.addField(m, fm)
+		
+		fm = mm.newField(_("Audio"))
+		mm.addField(m, fm)
+		
+		fm = mm.newField(_("Image"))
+		mm.addField(m, fm)
+		
+		fm = mm.newField(_("Level"))
+		mm.addField(m, fm)
+		
+		fm = mm.newField(_("Thing"))
+		mm.addField(m, fm)
+		
+		t = mm.newTemplate("{} -> {}".format(source, target))
+		t['qfmt'] = "{{"+source+"}}"
+		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+target+"}}\n{{"+_("Image")+"}}\n<div style=\"display:none;\">{{"+_("Audio")+"}}</div>"
+		mm.addTemplate(m, t)
+		
+		t = mm.newTemplate("{} -> {}".format(target, source))
+		t['qfmt'] = "{{"+target+"}}\n{{"+_("Image")+"}}\n<div style=\"display:none;\">{{"+_("Audio")+"}}</div>"
+		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+source+"}}"
+		mm.addTemplate(m, t)
+		
+		return m
+	
+	def selectModel(self, course, deck=None):
+		model = self.createMemriseModel(mw.col, course)
+		
+		modelStored = mw.col.models.byName(model['name'])
+		if modelStored:
+			if mw.col.models.scmhash(modelStored) == mw.col.models.scmhash(model):
+				model = modelStored
+			else:
+				model['name'] += "-{}".format(uuid.uuid4())
+			
+		if deck and 'mid' in deck:
+			deckModel = mw.col.models.get(deck['mid'])
+			if deckModel and mw.col.models.scmhash(deckModel) == mw.col.models.scmhash(model):
+				model = deckModel
+				
+		if model and not model['id']:
+			mw.col.models.add(model)
+
+		mw.col.models.setCurrent(model)
+		return model
+	
+	def selectDeck(self, name, merge=False):
+		did = mw.col.decks.id(name, create=False)
+		if not merge:
+			if did:
+				did = mw.col.decks.id("{}-{}".format(name, uuid.uuid4()))
+			else:
+				did = mw.col.decks.id(name, create=True)
+		
+		mw.col.decks.select(did)
+		return mw.col.decks.get(did)
+		
+	def saveDeckModelRelation(self, deck, model):
+		deck['mid'] = model['id']
+		mw.col.decks.save(deck)
+		
+		model["did"] = deck["id"]
+		mw.col.models.save(model)
+	
+	@staticmethod
+	def findField(note, names):
+		for name in names:
+			if name in note.keys():
+				return name
+		return None
+	
+	def getNote(self, deckName, course, thing):
+		notes = mw.col.findNotes(u'deck:"{}" {}:"{}"'.format(deckName, _('Thing'), thing.id))
+		if notes:
+			return mw.col.getNote(notes[0])
+		
+		for pair in [(self.camelize(course.source), self.camelize(course.target)), (_('Front'), _('Back')), ('Front', 'Back')]:
+			notes = mw.col.findNotes(u'deck:"{}" {}:"{}" {}:"{}"'.format(deckName, pair[0], thing.source[0], pair[1], thing.target[0]))
+			if notes:
+				return mw.col.getNote(notes[0])
+			
+		return None
+	
 	def importCourse(self):
 		if self.loader.isError():
 			self.buttons.show()
@@ -240,38 +324,71 @@ class MemriseImportDialog(QDialog):
 		
 		noteCache = {}
 		
-		if not self.createSubdecksCheckBox.isChecked():
-			self.selectDeck(course.title)		
+		deck = None
+		if self.deckSelection.currentIndex() != 0:
+			deck = self.selectDeck(self.deckSelection.currentText(), merge=True)
+		else:
+			deck = self.selectDeck(course.title, merge=False)
+		model = self.selectModel(course, deck)
+		self.saveDeckModelRelation(deck, model)
+				
 		for level in course:
-			if self.createSubdecksCheckBox.isChecked():
-				self.selectLevelDeck(len(course), level.index, course.title, level.title)
 			tags = self.getLevelTags(len(course), level)
 			for thing in level:
 				if thing.id in noteCache:
 					ankiNote = noteCache[thing.id]
 				else:
-					ankiNote = mw.col.newNote()
-					front = "Front"
-					if not front in ankiNote.keys():
-						front = _(front)
-					ankiNote[front] = thing.word
-					back = "Back"
-					if not back in ankiNote.keys():
-						back = _(back)
-					content = map(self.prepareText, thing.definitions)
-					if self.downloadMediaCheckBox.isChecked():
-						content += map(self.prepareImage, thing.imageUrls)
-						content += map(self.prepareAudio, thing.audioUrls)
-					ankiNote[back] = u"<br/>".join(content)
+					ankiNote = self.getNote(deck['name'], course, thing)
+					if not ankiNote:
+						ankiNote = mw.col.newNote()
+					
+				front = self.findField(ankiNote, [self.camelize(course.source), _('Front'), 'Front'])
+				if not front:
+					front = mw.col.models.fieldNames(ankiNote.model())[0]
+				ankiNote[front] = u"<br/>".join(map(self.prepareText, thing.source))
+				
+				frontAlternatives = u"{} {}".format(front, "Alternatives")
+				if frontAlternatives in ankiNote:
+					ankiNote[frontAlternatives] = u", ".join(map(self.prepareText, thing.sourceAlternatives))
+					
+				content = map(self.prepareText, thing.target)
+				if self.downloadMediaCheckBox.isChecked():
+					audio = map(self.prepareAudio, thing.audioUrls)
+					if _('Audio') in ankiNote:
+						ankiNote[_('Audio')] = u'\n'.join(audio)
+					else:
+						content += audio
+					
+					image = map(self.prepareImage, thing.imageUrls)
+					if _('Image') in ankiNote:
+						ankiNote[_('Image')] = u'\n'.join(image)
+					else:
+						content += image
+						
+				back = self.findField(ankiNote, [self.camelize(course.target), _('Back'), 'Back'])
+				if not back:
+					back = mw.col.models.fieldNames(ankiNote.model())[1]			
+				ankiNote[back] = u"<br/>".join(content)
+				
+				backAlternatives = u"{} {}".format(back, "Alternatives")
+				if backAlternatives in ankiNote:
+					ankiNote[backAlternatives] = u", ".join(map(self.prepareText, thing.targetAlternatives))
+
+				if _('Level') in ankiNote:
+					levels = set(filter(bool, ankiNote[_('Level')].split(u' ')))
+					levels.add(str(level.index))
+					ankiNote[_('Level')] = u' '.join(levels)
+				
+				if _('Thing') in ankiNote:
+					ankiNote[_('Thing')] = thing.id
 					
 				for tag in tags:
 					ankiNote.addTag(tag)
 					
-				if thing.id in noteCache:
-					ankiNote.flush()
-				else:
+				if not ankiNote.cards():
 					mw.col.addNote(ankiNote)
-					noteCache[thing.id] = ankiNote
+				ankiNote.flush()
+				noteCache[thing.id] = ankiNote
 		
 		mw.col.reset()
 		mw.reset()
