@@ -226,10 +226,12 @@ class MemriseImportDialog(QDialog):
 		fm = mm.newField(target)
 		mm.addField(m, fm)
 		
-		fm = mm.newField("{} {}".format(source, _("Alternatives")))
+		sourceAlternatives = "{} {}".format(source, _("Alternatives"))
+		fm = mm.newField(sourceAlternatives)
 		mm.addField(m, fm)
 		
-		fm = mm.newField("{} {}".format(target, _("Alternatives")))
+		targetAlternatives = "{} {}".format(target, _("Alternatives"))
+		fm = mm.newField(targetAlternatives)
 		mm.addField(m, fm)
 		
 		fm = mm.newField(_("Audio"))
@@ -244,14 +246,16 @@ class MemriseImportDialog(QDialog):
 		fm = mm.newField(_("Thing"))
 		mm.addField(m, fm)
 		
+		m['css'] += "\n.alts {\n font-style: italic;\n font-size: 14px;\n}"
+		
 		t = mm.newTemplate("{} -> {}".format(source, target))
-		t['qfmt'] = "{{"+source+"}}"
-		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+target+"}}\n{{"+_("Image")+"}}\n<div style=\"display:none;\">{{"+_("Audio")+"}}</div>"
+		t['qfmt'] = "{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}"		
+		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
 		mm.addTemplate(m, t)
 		
 		t = mm.newTemplate("{} -> {}".format(target, source))
-		t['qfmt'] = "{{"+target+"}}\n{{"+_("Image")+"}}\n<div style=\"display:none;\">{{"+_("Audio")+"}}</div>"
-		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+source+"}}"
+		t['qfmt'] =  "{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
+		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}"
 		mm.addTemplate(m, t)
 		
 		return m
@@ -375,9 +379,9 @@ class MemriseImportDialog(QDialog):
 					ankiNote[backAlternatives] = u", ".join(map(self.prepareText, thing.targetAlternatives))
 
 				if _('Level') in ankiNote:
-					levels = set(filter(bool, ankiNote[_('Level')].split(u' ')))
+					levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
 					levels.add(str(level.index))
-					ankiNote[_('Level')] = u' '.join(levels)
+					ankiNote[_('Level')] = u', '.join(levels)
 				
 				if _('Thing') in ankiNote:
 					ankiNote[_('Thing')] = thing.id
