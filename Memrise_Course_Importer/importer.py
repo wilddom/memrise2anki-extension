@@ -157,7 +157,7 @@ class MemriseImportDialog(QDialog):
 		
 		self.deckSelection = QComboBox()
 		self.deckSelection.addItem("")
-		for name in mw.col.decks.allNames(dyn=False):
+		for name in sorted(mw.col.decks.allNames(dyn=False)):
 			self.deckSelection.addItem(name)
 		self.deckSelection.setCurrentIndex(0)
 		layout.addWidget(QLabel("Merge with existing deck:"))
