@@ -7,8 +7,10 @@ class Thing(object):
         self.id = thingId
         self.targetDefinitions = []
         self.targetAlternatives = []
+        self.targetAlternativesHidden = []
         self.sourceDefinitions = []
         self.sourceAlternatives = []
+        self.sourceAlternativesHidden = []
         self.audioUrls = []
         self.imageUrls = []
 
@@ -167,8 +169,16 @@ class CourseLoader(object):
             thing = Thing(thingId)
             thing.targetDefinitions = columnHelper.getTargetDefinitions(thingData)
             thing.sourceDefinitions = columnHelper.getSourceDefinitions(thingData)
-            thing.targetAlternatives = columnHelper.getTargetAlternatives(thingData)
-            thing.sourceAlternatives = columnHelper.getSourceAlternatives(thingData)
+            for alt in columnHelper.getTargetAlternatives(thingData):
+                if not alt.startswith(u"_"):
+                    thing.targetAlternatives.append(alt)
+                else:
+                    thing.targetAlternativesHidden.append(alt)
+            for alt in columnHelper.getSourceAlternatives(thingData):
+                if not alt.startswith(u"_"):
+                    thing.sourceAlternatives.append(alt)
+                else:
+                    thing.sourceAlternativesHidden.append(alt)
             thing.audioUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getAudioUrls(thingData))
             thing.imageUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getImageUrls(thingData))
             level.things.append(thing)
