@@ -160,7 +160,7 @@ class MemriseImportDialog(QDialog):
 		for name in sorted(mw.col.decks.allNames(dyn=False)):
 			self.deckSelection.addItem(name)
 		self.deckSelection.setCurrentIndex(0)
-		layout.addWidget(QLabel("Merge with existing deck:"))
+		layout.addWidget(QLabel("Update existing deck:"))
 		layout.addWidget(self.deckSelection)
 		
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
@@ -310,9 +310,9 @@ class MemriseImportDialog(QDialog):
 		notes = mw.col.findNotes(u'deck:"{}" {}:"{}"'.format(deckName, _('Thing'), thing.id))
 		if notes:
 			return mw.col.getNote(notes[0])
-		
+
 		for pair in [(self.camelize(course.source), self.camelize(course.target)), (_('Front'), _('Back')), ('Front', 'Back')]:
-			notes = mw.col.findNotes(u'deck:"{}" {}:"{}" {}:"{}"'.format(deckName, pair[0], thing.source[0], pair[1], thing.target[0]))
+			notes = mw.col.findNotes(u'deck:"{}" "{}:{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.sourceDefinitions), pair[1], u"<br/>".join(thing.targetDefinitions)))
 			if notes:
 				return mw.col.getNote(notes[0])
 			
@@ -349,13 +349,13 @@ class MemriseImportDialog(QDialog):
 				front = self.findField(ankiNote, [self.camelize(course.source), _('Front'), 'Front'])
 				if not front:
 					front = mw.col.models.fieldNames(ankiNote.model())[0]
-				ankiNote[front] = u"<br/>".join(map(self.prepareText, thing.source))
+				ankiNote[front] = u"<br/>".join(map(self.prepareText, thing.sourceDefinitions))
 				
 				frontAlternatives = u"{} {}".format(front, "Alternatives")
 				if frontAlternatives in ankiNote:
 					ankiNote[frontAlternatives] = u", ".join(map(self.prepareText, thing.sourceAlternatives))
 					
-				content = map(self.prepareText, thing.target)
+				content = map(self.prepareText, thing.targetDefinitions)
 				if self.downloadMediaCheckBox.isChecked():
 					audio = map(self.prepareAudio, thing.audioUrls)
 					if _('Audio') in ankiNote:
