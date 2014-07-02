@@ -249,13 +249,13 @@ class MemriseImportDialog(QDialog):
 		m['css'] += "\n.alts {\n font-style: italic;\n font-size: 14px;\n}"
 		
 		t = mm.newTemplate("{} -> {}".format(source, target))
-		t['qfmt'] = "{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}"		
-		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
+		t['qfmt'] = "{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}"
+		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
 		mm.addTemplate(m, t)
 		
 		t = mm.newTemplate("{} -> {}".format(target, source))
-		t['qfmt'] =  "{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
-		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}"
+		t['qfmt'] =  "{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
+		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}"
 		mm.addTemplate(m, t)
 		
 		return m
