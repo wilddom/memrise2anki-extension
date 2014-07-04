@@ -47,53 +47,48 @@ class Course(object):
 class ColumnHelper(object):
     def __init__(self, columnData):
         self.textColumnIndices = []
+        self.textColumnLabels = []
         self.audioColumnIndices = []
+        self.audioColumnLabels = []
         self.imageColumnIndices = []
+        self.imageColumnLabels = []
         
         for index, column in columnData.items():
             if (column["kind"] == "text"):
                 self.textColumnIndices.append(index)
+                self.textColumnLabels.append(column["label"])
             elif (column["kind"] == "audio"):
                 self.audioColumnIndices.append(index)
+                self.audioColumnLabels.append(column["label"])
             elif (column["kind"] == "image"):
                 self.imageColumnIndices.append(index)
-        
-    def getTargetDefinitions(self, thingData):
+                self.imageColumnLabels.append(column["label"])
+
+    @staticmethod
+    def getDefinitions(indices, thingData):
         data = []
-        for index in self.textColumnIndices[0:1]:
-            value = thingData["columns"][index]["val"]
-            if value:
-                data.append(value)
-        return data
-        
-    def getTargetAlternatives(self, thingData):
-        alternatives = []
-        for index in self.textColumnIndices[0:1]:
-            for alt in thingData["columns"][index]["alts"]:
-                value = alt['val']
-                if value:
-                    alternatives.append(value)
-        return alternatives
-        
-    def getSourceDefinitions(self, thingData):
-        data = []
-        for index in self.textColumnIndices[1:]:
+        for index in indices:
             value = thingData["columns"][index]["val"]
             if value:
                 data.append(value)
         return data
     
-    def getSourceAlternatives(self, thingData):
+    @staticmethod
+    def getAlternatives(indices, thingData):
         alternatives = []
-        for index in self.textColumnIndices[1:]:
+        for index in indices:
             for alt in thingData["columns"][index]["alts"]:
                 value = alt['val']
                 if value:
                     alternatives.append(value)
+            for _, typing_corrects in thingData["columns"][index]["typing_corrects"].items():
+                for value in typing_corrects:
+                    if value:
+                        alternatives.append(value)
         return alternatives
     
     @staticmethod
-    def loadMediaColumns(indices, thingData):
+    def getUrls(indices, thingData):
         data = []
         for index in indices:
             values = thingData["columns"][index]["val"]
@@ -103,11 +98,23 @@ class ColumnHelper(object):
                     data.append(url)
         return data
     
+    def getTargetDefinitions(self, thingData):
+        return self.getDefinitions(self.textColumnIndices[0:1], thingData)
+
+    def getTargetAlternatives(self, thingData):
+        return self.getAlternatives(self.textColumnIndices[0:1], thingData)
+
+    def getSourceDefinitions(self, thingData):
+        return self.getDefinitions(self.textColumnIndices[1:], thingData)
+
+    def getSourceAlternatives(self, thingData):
+        return self.getAlternatives(self.textColumnIndices[1:], thingData)
+
     def getAudioUrls(self, thingData):
-        return self.loadMediaColumns(self.audioColumnIndices, thingData)
-    
+        return self.getUrls(self.audioColumnIndices, thingData)
+
     def getImageUrls(self, thingData):
-        return self.loadMediaColumns(self.imageColumnIndices, thingData)
+        return self.getUrls(self.imageColumnIndices, thingData)
 
 class CourseLoader(object):
     def __init__(self, service):
