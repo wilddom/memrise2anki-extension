@@ -160,7 +160,11 @@ class MemriseImportDialog(QDialog):
 		for name in sorted(mw.col.decks.allNames(dyn=False)):
 			self.deckSelection.addItem(name)
 		self.deckSelection.setCurrentIndex(0)
-		layout.addWidget(QLabel("Update existing deck:"))
+		deckSelectionTooltip = "<b>Updates a previously downloaded course.</b><br />In order for this to work, fields must not be renamed. But the field order and the templates can be changed freely. The field \"Thing\" is needed to identify existing notes."
+		self.deckSelection.setToolTip(deckSelectionTooltip)
+		label = QLabel("Update existing deck:")
+		label.setToolTip(deckSelectionTooltip)
+		layout.addWidget(label)
 		layout.addWidget(self.deckSelection)
 		
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
