@@ -3,16 +3,55 @@ import uuid
 import BeautifulSoup
 
 class Thing(object):
-    def __init__(self, thingId):
+    def __init__(self, thingId, thingData):
         self.id = thingId
-        self.targetDefinitions = []
-        self.targetAlternatives = []
-        self.targetAlternativesHidden = []
-        self.sourceDefinitions = []
-        self.sourceAlternatives = []
-        self.sourceAlternativesHidden = []
-        self.audioUrls = []
-        self.imageUrls = []
+        self.data = thingData
+        self.localAudioUrls = []
+        self.localImageUrls = []
+        
+    @property
+    def targetDefinitions(self):
+        return self.data.getTargetDefinitions()
+    
+    @property
+    def targetAlternatives(self):
+        return self.data.getTargetAlternatives()
+    
+    @property
+    def targetAlternativesHidden(self):
+        return self.data.getTargetAlternativesHidden()
+    
+    @property
+    def sourceDefinitions(self):
+        return self.data.getSourceDefinitions()
+    
+    @property
+    def sourceAlternatives(self):
+        return self.data.getSourceAlternatives()
+    
+    @property
+    def sourceAlternativesHidden(self):
+        return self.data.getSourceAlternativesHidden()
+    
+    @property
+    def audioUrls(self):
+        if self.localAudioUrls:
+            return self.localAudioUrls
+        return self.data.getAudioUrls()
+    
+    @audioUrls.setter
+    def audioUrls(self, urls):
+        self.localAudioUrls = urls
+    
+    @property
+    def imageUrls(self):
+        if self.localImageUrls:
+            return self.localImageUrls
+        return self.data.getImageUrls()
+    
+    @imageUrls.setter
+    def imageUrls(self, urls):
+        self.localImageUrls = urls
 
 class Level(object):
     def __init__(self, levelId):
@@ -60,7 +99,7 @@ class ColumnDefinition(object):
                 self.image.append(col)
 
 class ColumnData(object):
-    def __init__(self, columnDefinition, thingData):
+    def __init__(self, columnDefinition, thingData, fixUrl=lambda url: url):
         self.columns = columnDefinition
         self.textData = collections.OrderedDict()
         self.audioUrls = collections.OrderedDict()
@@ -68,25 +107,25 @@ class ColumnData(object):
         
         for column in self.columns.text:
             row = thingData['columns'][column['index']]
-            data = {'value': self.getDefinition(row),
-                    'alternatives': self.getAlternatives(row),
-                    'typing_corrects': self.getTypingCorrects(row)}
+            data = {'value': self.__getDefinitionFromRow(row),
+                    'alternatives': self.__getAlternativesFromRow(row),
+                    'typing_corrects': self.__getTypingCorrectsFromRow(row)}
             self.textData[column['label']] = data
         
         for column in self.columns.audio:
             row = thingData['columns'][column['index']]
-            self.audioUrls[column['label']] = self.getUrls(row)
+            self.audioUrls[column['label']] = map(fixUrl, self.__getUrlsFromRow(row))
             
         for column in self.columns.image:
             row = thingData['columns'][column['index']]
-            self.imageUrls[column['label']] = self.getUrls(row)
+            self.imageUrls[column['label']] = map(fixUrl, self.__getUrlsFromRow(row))
             
     @staticmethod
-    def getDefinition(row):
+    def __getDefinitionFromRow(row):
         return row["val"]
     
     @staticmethod
-    def getAlternatives(row):
+    def __getAlternativesFromRow(row):
         data = []
         for alt in row["alts"]:
             value = alt['val']
@@ -95,7 +134,7 @@ class ColumnData(object):
         return data
     
     @staticmethod
-    def getTypingCorrects(row):
+    def __getTypingCorrectsFromRow(row):
         data = []
         for _, typing_corrects in row["typing_corrects"].items():
             for value in typing_corrects:
@@ -104,7 +143,7 @@ class ColumnData(object):
         return data
     
     @staticmethod
-    def getUrls(row):
+    def __getUrlsFromRow(row):
         data = []
         for value in row["val"]:
             url = value["url"]
@@ -138,12 +177,49 @@ class ColumnData(object):
     
     def getSourceAlternativesHidden(self):
         return self.__getAlternatives(lambda x: x.startswith(u"_"), 1)
-
-    def getAudioUrls(self):
+    
+    @staticmethod
+    def __getKeyFromIndex(keys, index):
+        if not isinstance(index, int):
+            return index
+        return keys[index]
+    
+    def getAudioUrls(self, name=None):
+        name = self.__getKeyFromIndex(self.getAudioColumnNames(), name)
+        if name:
+            return self.audioUrls[name]
         return list(itertools.chain.from_iterable(self.audioUrls.values()))
 
-    def getImageUrls(self):
+    def getImageUrls(self, name=None):
+        name = self.__getKeyFromIndex(self.getImageColumnNames(), name)
+        if name:
+            return self.imageUrls[name]
         return list(itertools.chain.from_iterable(self.imageUrls.values()))
+    
+    def getImageColumnNames(self):
+        return self.imageUrls.keys()
+    
+    def getAudioColumnNames(self):
+        return self.audioUrls.keys()
+    
+    def getTextColumnNames(self):
+        return self.textData.keys()
+    
+    def getDefinition(self, name):
+        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
+        return self.textData[name]['value']
+    
+    def getAlternatives(self, name):
+        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
+        return filter(lambda x: not x.startswith(u"_"), self.textData[name]['alternatives'])
+    
+    def getAlternativesHidden(self, name):
+        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
+        return filter(lambda x: x.startswith(u"_"), self.textData[name]['alternatives'])
+    
+    def getTypingCorrects(self, name):
+        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
+        return self.textData[name]['typing_corrects']
 
 class CourseLoader(object):
     def __init__(self, service):
@@ -202,16 +278,8 @@ class CourseLoader(object):
         columnDefinitions = ColumnDefinition(columnData)
         
         for thingId, thingData in levelData["things"].items():
-            thingData = ColumnData(columnDefinitions, thingData)
-            thing = Thing(thingId)
-            thing.targetDefinitions = thingData.getTargetDefinitions()
-            thing.sourceDefinitions = thingData.getSourceDefinitions()
-            thing.targetAlternatives = thingData.getTargetAlternatives()
-            thing.targetAlternativesHidden = thingData.getTargetAlternativesHidden()
-            thing.sourceAlternatives = thingData.getSourceAlternatives()
-            thing.sourceAlternativesHidden = thingData.getSourceAlternativesHidden()
-            thing.audioUrls = map(self.service.toAbsoluteMediaUrl, thingData.getAudioUrls())
-            thing.imageUrls = map(self.service.toAbsoluteMediaUrl, thingData.getImageUrls())
+            thingData = ColumnData(columnDefinitions, thingData, self.service.toAbsoluteMediaUrl)
+            thing = Thing(thingId, thingData)
             level.things.append(thing)
             self.notify('thingLoaded', thing)
         
