@@ -312,12 +312,6 @@ class MemriseImportDialog(QDialog):
 			return mw.col.getNote(notes[0])
 
 		fields = [(self.camelize(course.source), self.camelize(course.target)), (_('Front'), _('Back')), ('Front', 'Back')]
-
-		for pair in fields:
-			notes = mw.col.findNotes(u'deck:"{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.sourceDefinitions)))
-			if len(notes) == 1:
-				return mw.col.getNote(notes[0])
-
 		for pair in fields:
 			notes = mw.col.findNotes(u'deck:"{}" "{}:{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.sourceDefinitions), pair[1], u"<br/>".join(thing.targetDefinitions)))
 			if notes:
