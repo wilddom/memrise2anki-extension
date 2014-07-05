@@ -1,4 +1,4 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, itertools
 import uuid
 import BeautifulSoup
 
@@ -44,77 +44,106 @@ class Course(object):
     def __len__(self):
         return len(self.levels)
 
-class ColumnHelper(object):
+class ColumnDefinition(object):
     def __init__(self, columnData):
-        self.textColumnIndices = []
-        self.textColumnLabels = []
-        self.audioColumnIndices = []
-        self.audioColumnLabels = []
-        self.imageColumnIndices = []
-        self.imageColumnLabels = []
+        self.text = []
+        self.audio = []
+        self.image = []
         
         for index, column in columnData.items():
-            if (column["kind"] == "text"):
-                self.textColumnIndices.append(index)
-                self.textColumnLabels.append(column["label"])
-            elif (column["kind"] == "audio"):
-                self.audioColumnIndices.append(index)
-                self.audioColumnLabels.append(column["label"])
-            elif (column["kind"] == "image"):
-                self.imageColumnIndices.append(index)
-                self.imageColumnLabels.append(column["label"])
+            col = {'index': index, 'label': column['label']}
+            if (column['kind'] == 'text'):
+                self.text.append(col)
+            elif (column['kind'] == 'audio'):
+                self.audio.append(col)
+            elif (column['kind'] == 'image'):
+                self.image.append(col)
 
+class ColumnData(object):
+    def __init__(self, columnDefinition, thingData):
+        self.columns = columnDefinition
+        self.textData = collections.OrderedDict()
+        self.audioUrls = collections.OrderedDict()
+        self.imageUrls = collections.OrderedDict()
+        
+        for column in self.columns.text:
+            row = thingData['columns'][column['index']]
+            data = {'value': self.getDefinition(row),
+                    'alternatives': self.getAlternatives(row),
+                    'typing_corrects': self.getTypingCorrects(row)}
+            self.textData[column['label']] = data
+        
+        for column in self.columns.audio:
+            row = thingData['columns'][column['index']]
+            self.audioUrls[column['label']] = self.getUrls(row)
+            
+        for column in self.columns.image:
+            row = thingData['columns'][column['index']]
+            self.imageUrls[column['label']] = self.getUrls(row)
+            
     @staticmethod
-    def getDefinitions(indices, thingData):
+    def getDefinition(row):
+        return row["val"]
+    
+    @staticmethod
+    def getAlternatives(row):
         data = []
-        for index in indices:
-            value = thingData["columns"][index]["val"]
+        for alt in row["alts"]:
+            value = alt['val']
             if value:
                 data.append(value)
         return data
     
     @staticmethod
-    def getAlternatives(indices, thingData):
-        alternatives = []
-        for index in indices:
-            for alt in thingData["columns"][index]["alts"]:
-                value = alt['val']
-                if value:
-                    alternatives.append(value)
-            for _, typing_corrects in thingData["columns"][index]["typing_corrects"].items():
-                for value in typing_corrects:
-                    if value:
-                        alternatives.append(value)
-        return alternatives
-    
-    @staticmethod
-    def getUrls(indices, thingData):
+    def getTypingCorrects(row):
         data = []
-        for index in indices:
-            values = thingData["columns"][index]["val"]
-            for value in values:
-                url = value["url"]
-                if url:
-                    data.append(url)
+        for _, typing_corrects in row["typing_corrects"].items():
+            for value in typing_corrects:
+                if value:
+                    data.append(value)
         return data
     
-    def getTargetDefinitions(self, thingData):
-        return self.getDefinitions(self.textColumnIndices[0:1], thingData)
+    @staticmethod
+    def getUrls(row):
+        data = []
+        for value in row["val"]:
+            url = value["url"]
+            if url:
+                data.append(url)
+        return data
+    
+    def __getTextAttribute(self, attr, start=None, stop=None):
+        return map(lambda x: x[attr], itertools.islice(self.textData.itervalues(), start, stop))
+    
+    def __getAlternatives(self, filterfunc, start=None, stop=None):
+        alternatives = filter(filterfunc, itertools.chain.from_iterable(self.__getTextAttribute('alternatives', start, stop)))
+        typing_corrects = itertools.chain.from_iterable(self.__getTextAttribute('typing_corrects', start, stop))
+        alternatives.extend(typing_corrects)
+        return alternatives
 
-    def getTargetAlternatives(self, thingData):
-        return self.getAlternatives(self.textColumnIndices[0:1], thingData)
+    def getTargetDefinitions(self):
+        return self.__getTextAttribute('value', 0, 1)
 
-    def getSourceDefinitions(self, thingData):
-        return self.getDefinitions(self.textColumnIndices[1:], thingData)
+    def getTargetAlternatives(self):
+        return self.__getAlternatives(lambda x: not x.startswith(u"_"), 0, 1)
+    
+    def getTargetAlternativesHidden(self):
+        return self.__getAlternatives(lambda x: x.startswith(u"_"), 0, 1)
 
-    def getSourceAlternatives(self, thingData):
-        return self.getAlternatives(self.textColumnIndices[1:], thingData)
+    def getSourceDefinitions(self):
+        return self.__getTextAttribute('value', 1)
 
-    def getAudioUrls(self, thingData):
-        return self.getUrls(self.audioColumnIndices, thingData)
+    def getSourceAlternatives(self):
+        return self.__getAlternatives(lambda x: not x.startswith(u"_"), 1)
+    
+    def getSourceAlternativesHidden(self):
+        return self.__getAlternatives(lambda x: x.startswith(u"_"), 1)
 
-    def getImageUrls(self, thingData):
-        return self.getUrls(self.imageColumnIndices, thingData)
+    def getAudioUrls(self):
+        return list(itertools.chain.from_iterable(self.audioUrls.values()))
+
+    def getImageUrls(self):
+        return list(itertools.chain.from_iterable(self.imageUrls.values()))
 
 class CourseLoader(object):
     def __init__(self, service):
@@ -170,24 +199,19 @@ class CourseLoader(object):
         poolId = levelData["session"]["level"]["pool_id"]
         
         columnData = levelData["pools"][unicode(poolId)]["columns"]
-        columnHelper = ColumnHelper(columnData)
+        columnDefinitions = ColumnDefinition(columnData)
         
         for thingId, thingData in levelData["things"].items():
+            thingData = ColumnData(columnDefinitions, thingData)
             thing = Thing(thingId)
-            thing.targetDefinitions = columnHelper.getTargetDefinitions(thingData)
-            thing.sourceDefinitions = columnHelper.getSourceDefinitions(thingData)
-            for alt in columnHelper.getTargetAlternatives(thingData):
-                if not alt.startswith(u"_"):
-                    thing.targetAlternatives.append(alt)
-                else:
-                    thing.targetAlternativesHidden.append(alt)
-            for alt in columnHelper.getSourceAlternatives(thingData):
-                if not alt.startswith(u"_"):
-                    thing.sourceAlternatives.append(alt)
-                else:
-                    thing.sourceAlternativesHidden.append(alt)
-            thing.audioUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getAudioUrls(thingData))
-            thing.imageUrls = map(self.service.toAbsoluteMediaUrl, columnHelper.getImageUrls(thingData))
+            thing.targetDefinitions = thingData.getTargetDefinitions()
+            thing.sourceDefinitions = thingData.getSourceDefinitions()
+            thing.targetAlternatives = thingData.getTargetAlternatives()
+            thing.targetAlternativesHidden = thingData.getTargetAlternativesHidden()
+            thing.sourceAlternatives = thingData.getSourceAlternatives()
+            thing.sourceAlternativesHidden = thingData.getSourceAlternativesHidden()
+            thing.audioUrls = map(self.service.toAbsoluteMediaUrl, thingData.getAudioUrls())
+            thing.imageUrls = map(self.service.toAbsoluteMediaUrl, thingData.getImageUrls())
             level.things.append(thing)
             self.notify('thingLoaded', thing)
         
