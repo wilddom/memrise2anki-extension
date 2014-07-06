@@ -218,6 +218,7 @@ class MemriseImportDialog(QDialog):
 		label.setToolTip(deckSelectionTooltip)
 		layout.addWidget(label)
 		layout.addWidget(self.deckSelection)
+		self.deckSelection.currentIndexChanged.connect(self.loadDeckUrl)
 		
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
 		
@@ -349,6 +350,18 @@ class MemriseImportDialog(QDialog):
 		
 		mw.col.decks.select(did)
 		return mw.col.decks.get(did)
+	
+	def loadDeckUrl(self, index):
+		did = mw.col.decks.id(self.deckSelection.currentText(), create=False)
+		if did:
+			deck = mw.col.decks.get(did, default=False)
+			url = deck.get("addons", {}).get("memrise", {}).get("url", "")
+			if url:
+				self.courseUrlLineEdit.setText(url)
+	
+	def saveDeckUrl(self, deck, url):
+		deck.setdefault('addons', {}).setdefault('memrise', {})["url"] = url
+		mw.col.decks.save(deck)
 		
 	def saveDeckModelRelation(self, deck, model):
 		deck['mid'] = model['id']
@@ -386,6 +399,7 @@ class MemriseImportDialog(QDialog):
 		else:
 			deck = self.selectDeck(course.title, merge=False)
 		model = self.selectModel(course, deck)
+		self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
 		self.saveDeckModelRelation(deck, model)
 				
 		for level in course:
