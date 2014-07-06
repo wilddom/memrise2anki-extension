@@ -131,6 +131,58 @@ class MemriseLoginDialog(QDialog):
 		dialog = MemriseLoginDialog(memriseService)
 		return dialog.exec_() == QDialog.Accepted
 
+class FieldMappingDialog(QDialog):
+	def __init__(self):
+		super(FieldMappingDialog, self).__init__()
+		self.modelFields = {}
+		
+		self.setWindowTitle("Assign Memrise Field")
+		layout = QVBoxLayout(self)
+		
+		self.label = QLabel("Assign the memrise field to:")
+		layout.addWidget(self.label)
+		
+		self.fieldSelection = QComboBox()
+		layout.addWidget(self.fieldSelection)
+		
+		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
+		buttons.accepted.connect(self.accept)
+		layout.addWidget(buttons)
+
+	def __setLabel(self, fieldname):
+		self.label.setText("Assign the memrise field <b>{}</b> to:".format(fieldname))
+	
+	def __setFields(self, fieldnames):
+		self.fieldSelection.clear()
+		self.fieldSelection.addItem("-- ignore --")
+		self.fieldSelection.insertSeparator(1)
+		for fieldname in fieldnames:
+			self.fieldSelection.addItem(fieldname)
+		
+	def getFieldname(self, note, fieldname, allow=[]):
+		if not note.mid in self.modelFields:
+			self.modelFields[note.mid] = {}
+		
+		if fieldname in self.modelFields[note.mid]:
+			return self.modelFields[note.mid][fieldname]
+		
+		if fieldname in note.keys():
+			self.modelFields[note.mid][fieldname] = fieldname
+			return self.modelFields[note.mid][fieldname]
+		
+		awailableFields = set(note.keys()) - (set(self.modelFields[note.mid].values()) - set(allow))
+		
+		self.__setLabel(fieldname)
+		self.__setFields(sorted(awailableFields))
+		self.exec_()
+		
+		if self.fieldSelection.currentIndex() != 0:
+			self.modelFields[note.mid][fieldname] = self.fieldSelection.currentText()
+			return self.modelFields[note.mid][fieldname]
+		
+		return None
+		
+
 class MemriseImportDialog(QDialog):
 	def __init__(self, memriseService):
 		super(MemriseImportDialog, self).__init__()
@@ -160,7 +212,7 @@ class MemriseImportDialog(QDialog):
 		for name in sorted(mw.col.decks.allNames(dyn=False)):
 			self.deckSelection.addItem(name)
 		self.deckSelection.setCurrentIndex(0)
-		deckSelectionTooltip = "<b>Updates a previously downloaded course.</b><br />In order for this to work, fields must not be renamed. But the field order and the templates can be changed freely. The field \"Thing\" is needed to identify existing notes."
+		deckSelectionTooltip = "<b>Updates a previously downloaded course.</b><br />In order for this to work the field <i>Thing</i> must not be removed or renamed, it is needed to identify existing notes."
 		self.deckSelection.setToolTip(deckSelectionTooltip)
 		label = QLabel("Update existing deck:")
 		label.setToolTip(deckSelectionTooltip)
@@ -182,6 +234,8 @@ class MemriseImportDialog(QDialog):
 		self.loader.totalCountChanged.connect(partial(self.progressBar.setRange,0))
 		self.loader.totalLoadedChanged.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
+		
+		self.fieldMapper = FieldMappingDialog()
 
 	def prepareTitleTag(self, tag):
 		value = ''.join(x for x in tag.title() if x.isalnum())
@@ -303,18 +357,11 @@ class MemriseImportDialog(QDialog):
 		model["did"] = deck["id"]
 		mw.col.models.save(model)
 	
-	@staticmethod
-	def findField(note, names):
-		for name in names:
-			if name in note.keys():
-				return name
-		return None
-	
-	def getNote(self, deckName, course, thing):
-		notes = mw.col.findNotes(u'deck:"{}" {}:"{}"'.format(deckName, _('Thing'), thing.id))
+	def findExistingNote(self, deckName, course, thing):
+		notes = mw.col.findNotes(u'deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
 		if notes:
 			return mw.col.getNote(notes[0])
-
+		
 		fields = [(self.camelize(course.source), self.camelize(course.target)), (_('Front'), _('Back')), ('Front', 'Back')]
 		for pair in fields:
 			notes = mw.col.findNotes(u'deck:"{}" "{}:{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.sourceDefinitions), pair[1], u"<br/>".join(thing.targetDefinitions)))
@@ -322,7 +369,7 @@ class MemriseImportDialog(QDialog):
 				return mw.col.getNote(notes[0])
 			
 		return None
-	
+
 	def importCourse(self):
 		if self.loader.isError():
 			self.buttons.show()
@@ -347,50 +394,52 @@ class MemriseImportDialog(QDialog):
 				if thing.id in noteCache:
 					ankiNote = noteCache[thing.id]
 				else:
-					ankiNote = self.getNote(deck['name'], course, thing)
+					ankiNote = self.findExistingNote(deck['name'], course, thing)
 					if not ankiNote:
 						ankiNote = mw.col.newNote()
 					
-				front = self.findField(ankiNote, [self.camelize(course.source), _('Front'), 'Front'])
-				if not front:
-					front = mw.col.models.fieldNames(ankiNote.model())[0]
-				ankiNote[front] = u"<br/>".join(map(self.prepareText, thing.sourceDefinitions))
+				frontField = self.fieldMapper.getFieldname(ankiNote, self.camelize(course.source))
+				if frontField:
+					ankiNote[frontField] = u"<br/>".join(map(self.prepareText, thing.sourceDefinitions))
 				
-				frontAlternatives = u"{} {}".format(front, "Alternatives")
-				if frontAlternatives in ankiNote:
-					ankiNote[frontAlternatives] = u", ".join(map(self.prepareText, thing.sourceAlternatives))
-					
-				content = map(self.prepareText, thing.targetDefinitions)
-				if self.downloadMediaCheckBox.isChecked():
-					audio = map(self.prepareAudio, thing.audioUrls)
-					if _('Audio') in ankiNote:
-						ankiNote[_('Audio')] = u'\n'.join(audio)
-					else:
-						content += audio
-					
-					image = map(self.prepareImage, thing.imageUrls)
-					if _('Image') in ankiNote:
-						ankiNote[_('Image')] = u'\n'.join(image)
-					else:
-						content += image
+				frontAlternativesField = self.fieldMapper.getFieldname(ankiNote, u"{} {}".format(self.camelize(course.source), _("Alternatives")))
+				if frontAlternativesField:
+					ankiNote[frontAlternativesField] = u", ".join(map(self.prepareText, thing.sourceAlternatives))
 						
-				back = self.findField(ankiNote, [self.camelize(course.target), _('Back'), 'Back'])
-				if not back:
-					back = mw.col.models.fieldNames(ankiNote.model())[1]
-				ankiNote[back] = u"<br/>".join(content)
+				backField = self.fieldMapper.getFieldname(ankiNote, self.camelize(course.target))
+				if backField:
+					ankiNote[backField] = u"<br/>".join(map(self.prepareText, thing.targetDefinitions))
 				
-				backAlternatives = u"{} {}".format(back, "Alternatives")
-				if backAlternatives in ankiNote:
-					ankiNote[backAlternatives] = u", ".join(map(self.prepareText, thing.targetAlternatives))
+				backAlternativesField = self.fieldMapper.getFieldname(ankiNote, u"{} {}".format(self.camelize(course.target), _("Alternatives")))
+				if backAlternativesField:
+					ankiNote[backAlternativesField] = u", ".join(map(self.prepareText, thing.targetAlternatives))
 
-				if _('Level') in ankiNote:
-					levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
-					levels.add(str(level.index))
-					ankiNote[_('Level')] = u', '.join(levels)
-				
-				if _('Thing') in ankiNote:
-					ankiNote[_('Thing')] = thing.id
+				if self.downloadMediaCheckBox.isChecked():
+					audios = map(self.prepareAudio, thing.audioUrls)
+					audioField = self.fieldMapper.getFieldname(ankiNote, _('Audio'), [frontField, backField])
+					if audioField:
+						if audioField in [frontField, backField]:
+							ankiNote[audioField] = u"<br/>".join([ankiNote[audioField]]+audios)
+						else:
+							ankiNote[audioField] = u'\n'.join(audios)
 					
+					images = map(self.prepareImage, thing.imageUrls)
+					imageField = self.fieldMapper.getFieldname(ankiNote, _('Image'), [frontField, backField])
+					if imageField:
+						if imageField in [frontField, backField]:
+							ankiNote[imageField] = u"<br/>".join([ankiNote[imageField]]+images)
+						else:
+							ankiNote[imageField] = u'\n'.join(images)
+
+				levelField = self.fieldMapper.getFieldname(ankiNote, _('Level'))
+				if levelField:
+					levels = set(filter(bool, map(unicode.strip, ankiNote[levelField].split(u','))))
+					levels.add(str(level.index))
+					ankiNote[levelField] = u', '.join(levels)
+				
+				if 'Thing' in ankiNote.keys():
+					ankiNote['Thing'] = thing.id
+				
 				for tag in tags:
 					ankiNote.addTag(tag)
 					
