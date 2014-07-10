@@ -150,7 +150,7 @@ class FieldMappingDialog(QDialog):
 		layout.addWidget(buttons)
 
 	def __setLabel(self, fieldname):
-		self.label.setText("Assign the memrise field <b>{}</b> to:".format(fieldname))
+		self.label.setText(u"Assign the memrise field <b>{}</b> to:".format(fieldname))
 	
 	def __setFields(self, fieldnames):
 		self.fieldSelection.clear()
@@ -239,7 +239,7 @@ class MemriseImportDialog(QDialog):
 		self.fieldMapper = FieldMappingDialog()
 
 	def prepareTitleTag(self, tag):
-		value = ''.join(x for x in tag.title() if x.isalnum())
+		value = u''.join(x for x in tag.title() if x.isalnum())
 		if value.isdigit():
 			return ''
 		return value
@@ -269,12 +269,12 @@ class MemriseImportDialog(QDialog):
 	
 	@staticmethod
 	def camelize(content):
-		return ''.join(x for x in content.title() if x.isalpha())
+		return u''.join(x for x in content.title() if x.isalpha())
 	
 	def createMemriseModel(self, col, course):
 		mm = col.models
 				
-		name = "Memrise {}".format(self.camelize(course.title))
+		name = u"Memrise {}".format(self.camelize(course.title))
 		m = mm.new(name)
 		
 		source = self.camelize(course.source) or _("Front")
@@ -285,11 +285,11 @@ class MemriseImportDialog(QDialog):
 		fm = mm.newField(target)
 		mm.addField(m, fm)
 		
-		sourceAlternatives = "{} {}".format(source, _("Alternatives"))
+		sourceAlternatives = u"{} {}".format(source, _("Alternatives"))
 		fm = mm.newField(sourceAlternatives)
 		mm.addField(m, fm)
 		
-		targetAlternatives = "{} {}".format(target, _("Alternatives"))
+		targetAlternatives = u"{} {}".format(target, _("Alternatives"))
 		fm = mm.newField(targetAlternatives)
 		mm.addField(m, fm)
 		
@@ -307,14 +307,14 @@ class MemriseImportDialog(QDialog):
 		
 		m['css'] += "\n.alts {\n font-style: italic;\n font-size: 14px;\n}"
 		
-		t = mm.newTemplate("{} -> {}".format(source, target))
-		t['qfmt'] = "{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}"
-		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
+		t = mm.newTemplate(u"{} -> {}".format(source, target))
+		t['qfmt'] = u"{{"+source+u"}}\n{{#"+sourceAlternatives+u"}}<br /><span class=\"alts\">{{"+sourceAlternatives+u"}}</span>{{/"+sourceAlternatives+u"}}\n{{#Image}}<br />{{Image}}{{/Image}}"
+		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+target+u"}}\n{{#"+targetAlternatives+u"}}<br /><span class=\"alts\">{{"+targetAlternatives+u"}}</span>{{/"+targetAlternatives+u"}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
 		mm.addTemplate(m, t)
 		
-		t = mm.newTemplate("{} -> {}".format(target, source))
-		t['qfmt'] =  "{{"+target+"}}\n{{#"+targetAlternatives+"}}<br /><span class=\"alts\">{{"+targetAlternatives+"}}</span>{{/"+targetAlternatives+"}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
-		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+source+"}}\n{{#"+sourceAlternatives+"}}<br /><span class=\"alts\">{{"+sourceAlternatives+"}}</span>{{/"+sourceAlternatives+"}}\n{{#Image}}<br />{{Image}}{{/Image}}"
+		t = mm.newTemplate(u"{} -> {}".format(target, source))
+		t['qfmt'] =  u"{{"+target+u"}}\n{{#"+targetAlternatives+u"}}<br /><span class=\"alts\">{{"+targetAlternatives+u"}}</span>{{/"+targetAlternatives+u"}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
+		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+source+u"}}\n{{#"+sourceAlternatives+u"}}<br /><span class=\"alts\">{{"+sourceAlternatives+u"}}</span>{{/"+sourceAlternatives+u"}}\n{{#Image}}<br />{{Image}}{{/Image}}"
 		mm.addTemplate(m, t)
 		
 		return m
@@ -327,7 +327,7 @@ class MemriseImportDialog(QDialog):
 			if mw.col.models.scmhash(modelStored) == mw.col.models.scmhash(model):
 				model = modelStored
 			else:
-				model['name'] += "-{}".format(uuid.uuid4())
+				model['name'] += u"-{}".format(uuid.uuid4())
 			
 		if deck and 'mid' in deck:
 			deckModel = mw.col.models.get(deck['mid'])
@@ -344,7 +344,7 @@ class MemriseImportDialog(QDialog):
 		did = mw.col.decks.id(name, create=False)
 		if not merge:
 			if did:
-				did = mw.col.decks.id("{}-{}".format(name, uuid.uuid4()))
+				did = mw.col.decks.id(u"{}-{}".format(name, uuid.uuid4()))
 			else:
 				did = mw.col.decks.id(name, create=True)
 		
