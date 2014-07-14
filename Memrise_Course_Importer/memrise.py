@@ -270,16 +270,14 @@ class CourseLoader(object):
                 getattr(observer, signal)(*attrs, **kwargs)
         
     def loadCourse(self, courseId):
-        self.course = Course(courseId)
+        course = Course(courseId)
         
-        levelUrl = self.service.getJsonLevelUrl(self.course.id, 1)
-        response = self.service.downloadWithRetry(levelUrl, 3)
-        levelData = json.load(response)
+        levelData = self.service.loadLevelData(course.id, 1)
         
-        self.course.title = levelData["session"]["course"]["name"]
-        self.course.description = levelData["session"]["course"]["description"]
-        self.course.source = levelData["session"]["course"]["source"]["name"]
-        self.course.target = levelData["session"]["course"]["target"]["name"]
+        course.title = levelData["session"]["course"]["name"]
+        course.description = levelData["session"]["course"]["description"]
+        course.source = levelData["session"]["course"]["source"]["name"]
+        course.target = levelData["session"]["course"]["target"]["name"]
         self.levelCount = levelData["session"]["course"]["num_levels"]
         self.thingCount = levelData["session"]["course"]["num_things"]
         
@@ -287,17 +285,15 @@ class CourseLoader(object):
         self.notify('thingCountChanged', self.thingCount)
         
         for levelIndex in range(1,self.levelCount+1):
-            level = self.loadLevel(levelIndex)
+            level = self.loadLevel(course, levelIndex)
             if level:
-                self.course.levels.append(level)
+                course.levels.append(level)
             self.notify('levelLoaded', levelIndex, level)
         
-        return self.course
+        return course
     
-    def loadLevel(self, levelIndex):
-        levelUrl = self.service.getJsonLevelUrl(self.course.id, levelIndex)
-        response = self.service.downloadWithRetry(levelUrl, 3)
-        levelData = json.load(response)
+    def loadLevel(self, course, levelIndex):
+        levelData = self.service.loadLevelData(course.id, levelIndex)
         
         if levelData["success"] == False:
             return None
@@ -362,6 +358,11 @@ class Service(object):
         if not observer is None:
             courseLoader.registerObserver(observer)
         return courseLoader.loadCourse(self.getCourseIdFromUrl(url))
+    
+    def loadLevelData(self, courseId, levelIndex):
+        levelUrl = self.getJsonLevelUrl(courseId, levelIndex)
+        response = self.downloadWithRetry(levelUrl, 3)
+        return json.load(response)
     
     @staticmethod
     def getCourseIdFromUrl(url):
