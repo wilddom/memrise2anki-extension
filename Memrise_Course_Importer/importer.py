@@ -176,11 +176,12 @@ class FieldMappingDialog(QDialog):
 		self.__setFields(sorted(awailableFields))
 		self.exec_()
 		
-		if self.fieldSelection.currentIndex() != 0:
+		if self.fieldSelection.currentIndex() == 0:
+			self.modelFields[note.mid][fieldname] = None
+		else:
 			self.modelFields[note.mid][fieldname] = self.fieldSelection.currentText()
-			return self.modelFields[note.mid][fieldname]
 		
-		return None
+		return self.modelFields[note.mid][fieldname]
 		
 
 class MemriseImportDialog(QDialog):
