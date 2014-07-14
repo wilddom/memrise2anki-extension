@@ -83,85 +83,89 @@ class Course(object):
     def __len__(self):
         return len(self.levels)
 
-class ColumnDefinition(object):
-    def __init__(self, columnData):
-        self.text = []
-        self.audio = []
-        self.image = []
+class ThingDataLoader(object):
+    def __init__(self, poolData):
+        self.textColumns = []
+        self.audioColumns = []
+        self.imageColumns = []
         
-        for index, column in columnData.items():
+        for index, column in poolData["columns"].items():
             col = {'index': index, 'label': column['label']}
             if (column['kind'] == 'text'):
-                self.text.append(col)
+                self.textColumns.append(col)
             elif (column['kind'] == 'audio'):
-                self.audio.append(col)
+                self.audioColumns.append(col)
             elif (column['kind'] == 'image'):
-                self.image.append(col)
+                self.imageColumns.append(col)
 
-class ColumnData(object):
-    def __init__(self, columnDefinition, thingData, fixUrl=lambda url: url):
-        self.columns = columnDefinition
-        self.textData = collections.OrderedDict()
-        self.audioUrls = collections.OrderedDict()
-        self.imageUrls = collections.OrderedDict()
+    def load(self, row, fixUrl=lambda url: url):
+        thingData = ThingData()
         
-        for column in self.columns.text:
-            row = thingData['columns'][column['index']]
-            data = {'value': self.__getDefinitionFromRow(row),
-                    'alternatives': self.__getAlternativesFromRow(row),
-                    'typing_corrects': self.__getTypingCorrectsFromRow(row)}
-            self.textData[column['label']] = data
+        for column in self.textColumns:
+            cell = row['columns'][column['index']]
+            data = {'value': self.__getDefinition(cell),
+                    'alternatives': self.__getAlternatives(cell),
+                    'typing_corrects': self.__getTypingCorrects(cell)}
+            thingData.textData[column['label']] = data
         
-        for column in self.columns.audio:
-            row = thingData['columns'][column['index']]
-            self.audioUrls[column['label']] = map(fixUrl, self.__getUrlsFromRow(row))
+        for column in self.audioColumns:
+            cell = row['columns'][column['index']]
+            thingData.audioUrls[column['label']] = map(fixUrl, self.__getUrls(cell))
             
-        for column in self.columns.image:
-            row = thingData['columns'][column['index']]
-            self.imageUrls[column['label']] = map(fixUrl, self.__getUrlsFromRow(row))
-            
+        for column in self.imageColumns:
+            cell = row['columns'][column['index']]
+            thingData.imageUrls[column['label']] = map(fixUrl, self.__getUrls(cell))
+
+        return thingData
+
     @staticmethod
-    def __getDefinitionFromRow(row):
-        return row["val"]
+    def __getDefinition(cell):
+        return cell["val"]
     
     @staticmethod
-    def __getAlternativesFromRow(row):
+    def __getAlternatives(cell):
         data = []
-        for alt in row["alts"]:
+        for alt in cell["alts"]:
             value = alt['val']
             if value:
                 data.append(value)
         return data
     
     @staticmethod
-    def __getTypingCorrectsFromRow(row):
+    def __getTypingCorrects(cell):
         data = []
-        for _, typing_corrects in row["typing_corrects"].items():
+        for _, typing_corrects in cell["typing_corrects"].items():
             for value in typing_corrects:
                 if value:
                     data.append(value)
         return data
     
     @staticmethod
-    def __getUrlsFromRow(row):
+    def __getUrls(cell):
         data = []
-        for value in row["val"]:
+        for value in cell["val"]:
             url = value["url"]
             if url:
                 data.append(url)
         return data
+
+class ThingData(object):
+    def __init__(self):
+        self.textData = collections.OrderedDict()
+        self.audioUrls = collections.OrderedDict()
+        self.imageUrls = collections.OrderedDict()
     
-    def __getTextAttribute(self, attr, start=None, stop=None):
+    def __getTextData(self, attr, start=None, stop=None):
         return map(lambda x: x[attr], itertools.islice(self.textData.itervalues(), start, stop))
     
     def __getAlternatives(self, filterfunc, start=None, stop=None):
-        alternatives = filter(filterfunc, itertools.chain.from_iterable(self.__getTextAttribute('alternatives', start, stop)))
-        typing_corrects = itertools.chain.from_iterable(self.__getTextAttribute('typing_corrects', start, stop))
+        alternatives = filter(filterfunc, itertools.chain.from_iterable(self.__getTextData('alternatives', start, stop)))
+        typing_corrects = itertools.chain.from_iterable(self.__getTextData('typing_corrects', start, stop))
         alternatives.extend(typing_corrects)
         return alternatives
 
     def getTargetDefinitions(self):
-        return self.__getTextAttribute('value', 0, 1)
+        return self.__getTextData('value', 0, 1)
 
     def getTargetAlternatives(self):
         return self.__getAlternatives(lambda x: not x.startswith(u"_"), 0, 1)
@@ -170,14 +174,14 @@ class ColumnData(object):
         return self.__getAlternatives(lambda x: x.startswith(u"_"), 0, 1)
 
     def getSourceDefinitions(self):
-        return self.__getTextAttribute('value', 1)
+        return self.__getTextData('value', 1)
 
     def getSourceAlternatives(self):
         return self.__getAlternatives(lambda x: not x.startswith(u"_"), 1)
     
     def getSourceAlternativesHidden(self):
         return self.__getAlternatives(lambda x: x.startswith(u"_"), 1)
-    
+
     @staticmethod
     def __getKeyFromIndex(keys, index):
         if not isinstance(index, int):
@@ -204,7 +208,7 @@ class ColumnData(object):
     
     def getTextColumnNames(self):
         return self.textData.keys()
-    
+
     def getDefinition(self, name):
         name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
         return self.textData[name]['value']
@@ -274,11 +278,11 @@ class CourseLoader(object):
         level.title = levelData["session"]["level"]["title"]
         poolId = levelData["session"]["level"]["pool_id"]
         
-        columnData = levelData["pools"][unicode(poolId)]["columns"]
-        columnDefinitions = ColumnDefinition(columnData)
+        poolData = levelData["pools"][unicode(poolId)]
+        thingDataLoader = ThingDataLoader(poolData)
         
-        for thingId, thingData in levelData["things"].items():
-            thingData = ColumnData(columnDefinitions, thingData, self.service.toAbsoluteMediaUrl)
+        for thingId, thingRowData in levelData["things"].items():
+            thingData = thingDataLoader.load(thingRowData, self.service.toAbsoluteMediaUrl)
             thing = Thing(thingId, thingData)
             level.things.append(thing)
             self.notify('thingLoaded', thing)
