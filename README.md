@@ -6,16 +6,17 @@ An extension for Anki 2 that downloads and converts a course from Memrise into a
 Note type
 ---------
 
-A special note type is created with separate fiels for text definitions, text alternatives, images, audio and levels.
-These fields can be renamed and reordered freely. This is done because it's not possible to accurately reproduce
-the versatile Memrise levels. But having the fields separate gives the flexibility to rebuild them manually with Anki templates.
+A special note type is created with separate fiels for text definitions, text alternatives, attributes, images,
+audio and levels. This is done because it's not possible to accurately reproduce the versatility of Memrise levels.
+But having the fields separate gives the flexibility to rebuild them manually with Anki templates.
+All fields can be renamed and reordered freely.
 
 The *Thing*
 -----------
 
-The special field named *Thing* is used to identify existing notes when a previously downloaded deck is updated. This allows to
-update already downloaded notes without losing card statistics. Removing or renaming this field results in duplicated entries.
-**Therefore you are strongly encouraged to keep this field**.
+The special field named *Thing* is used to identify existing notes when a previously downloaded deck is updated.
+This allows to update already downloaded notes without losing card statistics. Removing or renaming this field
+results in duplicated entries. **Therefore you are strongly encouraged to keep this field**.
 
 Levels
 ------
@@ -28,7 +29,7 @@ Caveat
 ------
 
 Currently the first first text column is handled as front field and the other text columns are merged as back field.
-This behaviour could be changed in a future release.
+The same is valid for attributes. This behaviour could be changed in a future release.
 
 Bug Reports
 -----------

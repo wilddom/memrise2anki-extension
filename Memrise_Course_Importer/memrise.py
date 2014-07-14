@@ -53,6 +53,10 @@ class Thing(object):
     def imageUrls(self, urls):
         self.localImageUrls = urls
 
+    @property
+    def attributes(self):
+        return self.data.getAttributes()
+
 class Level(object):
     def __init__(self, levelId):
         self.id = levelId
@@ -88,8 +92,9 @@ class ThingDataLoader(object):
         self.textColumns = []
         self.audioColumns = []
         self.imageColumns = []
+        self.attributes = []
         
-        for index, column in poolData["columns"].items():
+        for index, column in sorted(poolData["columns"].items()):
             col = {'index': index, 'label': column['label']}
             if (column['kind'] == 'text'):
                 self.textColumns.append(col)
@@ -97,6 +102,11 @@ class ThingDataLoader(object):
                 self.audioColumns.append(col)
             elif (column['kind'] == 'image'):
                 self.imageColumns.append(col)
+
+        for index, attribute in sorted(poolData["attributes"].items()):
+            attr = {'index': index, 'label': attribute['label']}
+            if (attribute['kind'] == 'text'):
+                self.attributes.append(attr)
 
     def load(self, row, fixUrl=lambda url: url):
         thingData = ThingData()
@@ -115,6 +125,10 @@ class ThingDataLoader(object):
         for column in self.imageColumns:
             cell = row['columns'][column['index']]
             thingData.imageUrls[column['label']] = map(fixUrl, self.__getUrls(cell))
+
+        for attribute in self.attributes:
+            cell = row['attributes'][attribute['index']]
+            thingData.attributes[attribute['label']] = self.__getAttribute(cell)
 
         return thingData
 
@@ -149,11 +163,16 @@ class ThingDataLoader(object):
                 data.append(url)
         return data
 
+    @staticmethod
+    def __getAttribute(cell):
+        return cell["val"]
+
 class ThingData(object):
     def __init__(self):
         self.textData = collections.OrderedDict()
         self.audioUrls = collections.OrderedDict()
         self.imageUrls = collections.OrderedDict()
+        self.attributes = collections.OrderedDict()
     
     def __getTextData(self, attr, start=None, stop=None):
         return map(lambda x: x[attr], itertools.islice(self.textData.itervalues(), start, stop))
@@ -182,6 +201,9 @@ class ThingData(object):
     def getSourceAlternativesHidden(self):
         return self.__getAlternatives(lambda x: x.startswith(u"_"), 1)
 
+    def getAttributes(self):
+        return filter(bool, self.attributes.values())
+
     @staticmethod
     def __getKeyFromIndex(keys, index):
         if not isinstance(index, int):
@@ -209,6 +231,9 @@ class ThingData(object):
     def getTextColumnNames(self):
         return self.textData.keys()
 
+    def getAttributeNames(self):
+        return self.attributes.keys()
+
     def getDefinition(self, name):
         name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
         return self.textData[name]['value']
@@ -224,6 +249,10 @@ class ThingData(object):
     def getTypingCorrects(self, name):
         name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
         return self.textData[name]['typing_corrects']
+
+    def getAttribute(self, name):
+        name = self.__getKeyFromIndex(self.getAttributeNames(), name)
+        return self.attributes[name]
 
 class CourseLoader(object):
     def __init__(self, service):
