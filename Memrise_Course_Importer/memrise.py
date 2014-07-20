@@ -244,7 +244,7 @@ class ThingData(object):
     
     def getAlternativesHidden(self, name):
         name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
-        return filter(lambda x: x.startswith(u"_"), self.textData[name]['alternatives'])
+        return map(lambda x: x.lstrip(u'_'), filter(lambda x: x.startswith(u"_"), self.textData[name]['alternatives']))
     
     def getTypingCorrects(self, name):
         name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
