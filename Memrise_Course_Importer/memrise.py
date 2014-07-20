@@ -16,11 +16,7 @@ class Thing(object):
     @property
     def targetAlternatives(self):
         return self.data.getTargetAlternatives()
-    
-    @property
-    def targetAlternativesHidden(self):
-        return self.data.getTargetAlternativesHidden()
-    
+
     @property
     def sourceDefinitions(self):
         return self.data.getSourceDefinitions()
@@ -28,11 +24,7 @@ class Thing(object):
     @property
     def sourceAlternatives(self):
         return self.data.getSourceAlternatives()
-    
-    @property
-    def sourceAlternativesHidden(self):
-        return self.data.getSourceAlternativesHidden()
-    
+
     @property
     def audioUrls(self):
         if self.localAudioUrls:
@@ -189,18 +181,12 @@ class ThingData(object):
     def getTargetAlternatives(self):
         return self.__getAlternatives(lambda x: not x.startswith(u"_"), 0, 1)
     
-    def getTargetAlternativesHidden(self):
-        return self.__getAlternatives(lambda x: x.startswith(u"_"), 0, 1)
-
     def getSourceDefinitions(self):
         return self.__getTextData('value', 1)
 
     def getSourceAlternatives(self):
         return self.__getAlternatives(lambda x: not x.startswith(u"_"), 1)
     
-    def getSourceAlternativesHidden(self):
-        return self.__getAlternatives(lambda x: x.startswith(u"_"), 1)
-
     def getAttributes(self):
         return filter(bool, self.attributes.values())
 
