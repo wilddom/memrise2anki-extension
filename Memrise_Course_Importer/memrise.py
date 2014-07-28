@@ -306,6 +306,7 @@ class Service(object):
         if cookiejar is None:
             cookiejar = cookielib.CookieJar()
         self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar))
+        self.opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
     
     def downloadWithRetry(self, url, tryCount):
         try:
@@ -320,12 +321,14 @@ class Service(object):
                 raise
     
     def isLoggedIn(self):
-        response = self.opener.open('http://www.memrise.com/login/')
+        request = urllib2.Request('http://www.memrise.com/login/', None, {'Referer': 'http://www.memrise.com/'})
+        response = self.opener.open(request)
         return response.geturl() == 'http://www.memrise.com/home/'
         
     def login(self, username, password):
-        response = self.opener.open('http://www.memrise.com/login/')
-        soup = BeautifulSoup.BeautifulSoup(response.read())
+        request1 = urllib2.Request('http://www.memrise.com/login/', None, {'Referer': 'http://www.memrise.com/'})
+        response1 = self.opener.open(request1)
+        soup = BeautifulSoup.BeautifulSoup(response1.read())
         form = soup.find("form", attrs={"action": '/login/'})
         fields = {}
         for field in form.findAll("input"):
@@ -336,8 +339,9 @@ class Service(object):
                     fields[field['name']] = ""
         fields['username'] = username
         fields['password'] = password
-        response = self.opener.open('http://www.memrise.com/login/', urllib.urlencode(fields))
-        return response.geturl() == 'http://www.memrise.com/home/'
+        request2 = urllib2.Request(response1.geturl(), urllib.urlencode(fields), {'Referer': response1.geturl()})
+        response2 = self.opener.open(request2)
+        return response2.geturl() == 'http://www.memrise.com/home/'
     
     def loadCourse(self, url, observer=None):
         courseLoader = CourseLoader(self)
@@ -385,4 +389,3 @@ class Service(object):
         mediaFile.write(self.downloadWithRetry(url, 3).read())
         mediaFile.close()
         return localName
-
