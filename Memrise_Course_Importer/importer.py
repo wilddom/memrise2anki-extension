@@ -29,8 +29,8 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
-			thing.imageUrls = map(self.sender.memriseService.downloadMedia, thing.imageUrls)
-			thing.audioUrls = map(self.sender.memriseService.downloadMedia, thing.audioUrls)
+			thing.imageUrls = filter(None, map(self.sender.memriseService.downloadMedia, thing.imageUrls))
+			thing.audioUrls = filter(None, map(self.sender.memriseService.downloadMedia, thing.audioUrls))
 			
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:

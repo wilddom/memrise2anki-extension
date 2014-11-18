@@ -385,7 +385,14 @@ class Service(object):
         contentExtension = os.path.splitext(memrisePath)[1]
         localName = "{:s}{:s}".format(uuid.uuid5(uuid.NAMESPACE_URL, url.encode('utf-8')), contentExtension)
         fullMediaPath = os.path.join(self.downloadDirectory, localName)
-        mediaFile = open(fullMediaPath, "wb")
-        mediaFile.write(self.downloadWithRetry(url, 3).read())
-        mediaFile.close()
+        
+        try:
+            with open(fullMediaPath, "wb") as mediaFile:
+                mediaFile.write(self.downloadWithRetry(url, 3).read())
+        except urllib2.HTTPError as e:
+            if e.code == 403:
+                return False
+            else:
+                raise e
+
         return localName
