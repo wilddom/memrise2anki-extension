@@ -380,7 +380,7 @@ class Service(object):
     def toAbsoluteMediaUrl(url):
         return urlparse.urljoin(u"http://static.memrise.com/", url)
     
-    def downloadMedia(self, url):
+    def downloadMedia(self, url, skipExisting=False):
         if not self.downloadDirectory:
             return url
         
@@ -390,6 +390,9 @@ class Service(object):
         contentExtension = os.path.splitext(memrisePath)[1]
         localName = "{:s}{:s}".format(uuid.uuid5(uuid.NAMESPACE_URL, url.encode('utf-8')), contentExtension)
         fullMediaPath = os.path.join(self.downloadDirectory, localName)
+        
+        if skipExisting and os.path.isfile(fullMediaPath):
+            return localName
         
         try:
             with open(fullMediaPath, "wb") as mediaFile:

@@ -29,8 +29,9 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
-			thing.imageUrls = filter(None, map(self.sender.memriseService.downloadMedia, thing.imageUrls))
-			thing.audioUrls = filter(None, map(self.sender.memriseService.downloadMedia, thing.audioUrls))
+			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
+			thing.imageUrls = filter(None, map(download, thing.imageUrls))
+			thing.audioUrls = filter(None, map(download, thing.audioUrls))
 			
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
@@ -60,6 +61,7 @@ class MemriseCourseLoader(QObject):
 		self.result = None
 		self.error = False
 		self.downloadMedia = True
+		self.skipExistingMedia = True
 	
 	def load(self, url):
 		self.url = url
@@ -205,8 +207,14 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
-		self.downloadMediaCheckBox.setChecked(True)
 		layout.addWidget(self.downloadMediaCheckBox)
+		
+		self.skipExistingMediaCheckBox = QCheckBox("Skip download of existing media files")
+		layout.addWidget(self.skipExistingMediaCheckBox)
+		
+		self.downloadMediaCheckBox.stateChanged.connect(self.skipExistingMediaCheckBox.setEnabled)
+		self.downloadMediaCheckBox.setChecked(True)
+		self.skipExistingMediaCheckBox.setChecked(True)
 		
 		self.deckSelection = QComboBox()
 		self.deckSelection.addItem("")
@@ -496,6 +504,7 @@ class MemriseImportDialog(QDialog):
 		
 		courseUrl = self.courseUrlLineEdit.text()
 		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
+		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
 		self.loader.start(courseUrl)
 
 def startCourseImporter():
