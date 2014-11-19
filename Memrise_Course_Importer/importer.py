@@ -226,7 +226,13 @@ class MemriseImportDialog(QDialog):
 		self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
 		self.buttons.accepted.connect(self.loadCourse)
 		self.buttons.rejected.connect(self.reject)
+		okButton = self.buttons.button(QDialogButtonBox.Ok)
+		okButton.setEnabled(False)
 		layout.addWidget(self.buttons)
+		
+		def checkUrl(button, predicate, url):
+			button.setEnabled(predicate(url))
+		self.courseUrlLineEdit.textChanged.connect(partial(checkUrl,okButton,memriseService.checkCourseUrl))
 		
 		self.progressBar = QProgressBar()
 		self.progressBar.hide()
@@ -238,7 +244,7 @@ class MemriseImportDialog(QDialog):
 		self.loader.finished.connect(self.importCourse)
 		
 		self.fieldMapper = FieldMappingDialog()
-
+	
 	def prepareTitleTag(self, tag):
 		value = u''.join(x for x in tag.title() if x.isalnum())
 		if value.isdigit():

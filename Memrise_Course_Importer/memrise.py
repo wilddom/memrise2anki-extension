@@ -362,6 +362,11 @@ class Service(object):
         return int(match.group(1))
 
     @staticmethod
+    def checkCourseUrl(url):
+        match = re.match('http://www.memrise.com/course/\d+/.+/', url)
+        return bool(match)
+
+    @staticmethod
     def getHtmlLevelUrl(courseUrl, levelNum):
         if not re.match('http://www.memrise.com/course/\d+/.+/', courseUrl):
             raise Exception("Import failed. Does your URL look like the sample URL above?")
