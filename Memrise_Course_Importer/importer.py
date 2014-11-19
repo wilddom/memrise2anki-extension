@@ -238,8 +238,12 @@ class MemriseImportDialog(QDialog):
 		self.progressBar.hide()
 		layout.addWidget(self.progressBar)
 		
+		def setTotalCount(progressBar, totalCount):
+			progressBar.setRange(0, totalCount)
+			progressBar.setFormat("%p% (%v/%m)")
+		
 		self.loader = MemriseCourseLoader(memriseService)
-		self.loader.totalCountChanged.connect(partial(self.progressBar.setRange,0))
+		self.loader.totalCountChanged.connect(partial(setTotalCount, self.progressBar))
 		self.loader.totalLoadedChanged.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
 		
