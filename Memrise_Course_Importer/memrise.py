@@ -1,67 +1,6 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, itertools
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, itertools, operator
 import uuid
 import BeautifulSoup
-
-class Thing(object):
-    def __init__(self, thingId, thingData):
-        self.id = thingId
-        self.data = thingData
-        self.localAudioUrls = []
-        self.localImageUrls = []
-        
-    @property
-    def targetDefinitions(self):
-        return self.data.getTargetDefinitions()
-    
-    @property
-    def targetAlternatives(self):
-        return self.data.getTargetAlternatives()
-
-    @property
-    def sourceDefinitions(self):
-        return self.data.getSourceDefinitions()
-    
-    @property
-    def sourceAlternatives(self):
-        return self.data.getSourceAlternatives()
-
-    @property
-    def audioUrls(self):
-        if self.localAudioUrls:
-            return self.localAudioUrls
-        return self.data.getAudioUrls()
-    
-    @audioUrls.setter
-    def audioUrls(self, urls):
-        self.localAudioUrls = urls
-    
-    @property
-    def imageUrls(self):
-        if self.localImageUrls:
-            return self.localImageUrls
-        return self.data.getImageUrls()
-    
-    @imageUrls.setter
-    def imageUrls(self, urls):
-        self.localImageUrls = urls
-
-    @property
-    def attributes(self):
-        return self.data.getAttributes()
-
-class Level(object):
-    def __init__(self, levelId):
-        self.id = levelId
-        self.index = 0
-        self.title = ""
-        self.things = []
-        
-    def __iter__(self):
-        for thing in self.things:
-            yield thing
-                
-    def __len__(self):
-        return len(self.things)
 
 class Course(object):
     def __init__(self, courseId):
@@ -79,50 +18,216 @@ class Course(object):
     def __len__(self):
         return len(self.levels)
 
-class ThingDataLoader(object):
-    def __init__(self, poolData):
-        self.textColumns = []
-        self.audioColumns = []
-        self.imageColumns = []
-        self.attributes = []
+class Level(object):
+    def __init__(self, levelId):
+        self.id = levelId
+        self.index = 0
+        self.title = ""
+        self.things = []
+        self.course = None
+        self.pool = None
         
-        for index, column in sorted(poolData["columns"].items()):
-            col = {'index': index, 'label': column['label']}
-            if (column['kind'] == 'text'):
-                self.textColumns.append(col)
-            elif (column['kind'] == 'audio'):
-                self.audioColumns.append(col)
-            elif (column['kind'] == 'image'):
-                self.imageColumns.append(col)
+    def __iter__(self):
+        for thing in self.things:
+            yield thing
+                
+    def __len__(self):
+        return len(self.things)
 
-        for index, attribute in sorted(poolData["attributes"].items()):
-            attr = {'index': index, 'label': attribute['label']}
-            if (attribute['kind'] == 'text'):
-                self.attributes.append(attr)
+class Pool(object):
+    def __init__(self, poolId=None):
+        self.id = poolId
+        self.name = ''
+        self.textColumns = collections.OrderedDict()
+        self.audioColumns = collections.OrderedDict()
+        self.imageColumns = collections.OrderedDict()
+        self.attributes = collections.OrderedDict()
 
-    def load(self, row, fixUrl=lambda url: url):
-        thingData = ThingData()
+    def getTextColumnNames(self):
+        return self.textColumns.keys()
+
+    def getImageColumnNames(self):
+        return self.imageColumns.keys()
+    
+    def getAudioColumnNames(self):
+        return self.audioColumns.keys()
+
+    def getAttributeNames(self):
+        return self.attributes.keys()
+
+    @staticmethod
+    def __getKeyFromIndex(keys, index):
+        if not isinstance(index, int):
+            return index
+        return keys[index]
+    
+    def getTextColumnName(self, index):
+        return self.__getKeyFromIndex(self.getTextColumnNames(), index)
+
+    def getImageColumnName(self, index):
+        return self.__getKeyFromIndex(self.getImageColumnNames(), index)
+    
+    def getAudioColumnName(self, index):
+        return self.__getKeyFromIndex(self.getAudioColumnNames(), index)
+
+    def getAttributeName(self, index):
+        return self.__getKeyFromIndex(self.getAttributeNames(), index)
+
+    def hasTextColumnName(self, name):
+        return name in self.getTextColumnNames()
+
+    def hasImageColumnName(self, name):
+        return name in self.getImageColumnNames()
+    
+    def hasAudioColumnName(self, name):
+        return name in self.getAudioColumnNames()
+
+    def hasAttributeName(self, name):
+        return name in self.getAttributeNames()
+
+    def countTextColumns(self):
+        return len(self.textColumns)
+    
+    def countImageColumns(self):
+        return len(self.imageColumns)
+    
+    def countAudioColumns(self):
+        return len(self.audioColumns)
+    
+    def countAttributes(self):
+        return len(self.attributes)
+
+class Thing(object):
+    def __init__(self, thingId):
+        self.id = thingId
+        self.level = None
+        self.pool = None
         
-        for column in self.textColumns:
-            cell = row['columns'][column['index']]
-            data = {'value': self.__getDefinition(cell),
-                    'alternatives': self.__getAlternatives(cell),
-                    'typing_corrects': self.__getTypingCorrects(cell)}
-            thingData.textData[column['label']] = data
+        self.textData = collections.OrderedDict()
+        self.audioUrls = collections.OrderedDict()
+        self.imageUrls = collections.OrderedDict()
+        self.attributes = collections.OrderedDict()
         
-        for column in self.audioColumns:
-            cell = row['columns'][column['index']]
-            thingData.audioUrls[column['label']] = map(fixUrl, self.__getUrls(cell))
+        self.localAudioUrls = collections.OrderedDict()
+        self.localImageUrls = collections.OrderedDict()
+    
+    def getAudioUrls(self, nameOrIndex):
+        name = self.pool.getAudioColumnName(nameOrIndex)
+        return self.audioUrls[name]
+        
+    def getAllAudioUrls(self):
+        return list(itertools.chain.from_iterable(self.audioUrls.values()))
+
+    def getImageUrls(self, nameOrIndex):
+        name = self.pool.getImageColumnName(nameOrIndex)
+        return self.imageUrls[name]
             
-        for column in self.imageColumns:
-            cell = row['columns'][column['index']]
-            thingData.imageUrls[column['label']] = map(fixUrl, self.__getUrls(cell))
+    def getAllImageUrls(self):
+        return list(itertools.chain.from_iterable(self.imageUrls.values()))
 
-        for attribute in self.attributes:
-            cell = row['attributes'][attribute['index']]
-            thingData.attributes[attribute['label']] = self.__getAttribute(cell)
+    def getDefinition(self, nameOrIndex):
+        name = self.pool.getTextColumnName(nameOrIndex)
+        return self.textData[name]['value']
+    
+    def __getTextData(self, attr, start=None, stop=None):
+        return map(lambda x: x[attr], itertools.islice(self.textData.itervalues(), start, stop))
+    
+    def getDefinitions(self, startIndex=None, endIndex=None):
+        return self.__getTextData('value', startIndex, endIndex)
+    
+    def getAlternatives(self, nameOrIndex):
+        name = self.pool.getTextColumnName(nameOrIndex)
+        return self.textData[name]['alternatives']
+    
+    def getHiddenAlternatives(self, nameOrIndex):
+        name = self.pool.getTextColumnName(nameOrIndex)
+        return self.textData[name]['hidden_alternatives']
+    
+    def getTypingCorrects(self, nameOrIndex):
+        name = self.pool.getTextColumnName(nameOrIndex)
+        return self.textData[name]['typing_corrects']
 
-        return thingData
+    def getAttribute(self, nameOrIndex):
+        name = self.pool.getAttributeName(nameOrIndex)
+        return self.attributes[name]
+    
+    def getAllAttributes(self):
+        return filter(bool, self.attributes.values())
+    
+    def setLocalAudioUrls(self, nameOrIndex, urls):
+        name = self.pool.getAudioColumnName(nameOrIndex)
+        self.localAudioUrls[name] = urls
+    
+    def getLocalAudioUrls(self, nameOrIndex):
+        name = self.pool.getAudioColumnName(nameOrIndex)
+        return self.localAudioUrls[name]
+        
+    def getAllLocalAudioUrls(self):
+        return list(itertools.chain.from_iterable(self.localAudioUrls.values()))
+
+    def setLocalImageUrls(self, nameOrIndex, urls):
+        name = self.pool.getImageColumnName(nameOrIndex)
+        self.localImageUrls[name] = urls
+
+    def getLocalImageUrls(self, nameOrIndex):
+        name = self.pool.getImageColumnName(nameOrIndex)
+        return self.localImageUrls[name]
+            
+    def getAllLocalImageUrls(self):
+        return list(itertools.chain.from_iterable(self.localImageUrls.values()))
+
+class ThingLoader(object):
+    def __init__(self, pool):
+        self.pool = pool
+    
+    def createThing(self, thingId):
+        thing = Thing(thingId)
+        thing.pool = self.pool
+        
+        for colName in self.pool.getTextColumnNames():
+            thing.textData[colName] = {
+                'value': "",
+                'alternatives': [],
+                'hidden_alternatives': [],
+                'typing_corrects': []
+            }
+        
+        for colName in self.pool.getAudioColumnNames():
+            thing.audioUrls[colName] = []
+            thing.localAudioUrls[colName] = []
+            
+        for colName in self.pool.getImageColumnNames():
+            thing.imageUrls[colName] = []
+            thing.localImageUrls[colName] = []
+            
+        for attrName in self.pool.getAttributeNames():
+            thing.attributes[attrName] = ""
+            
+        return thing
+    
+    def loadThing(self, thingId, row, fixUrl=lambda url: url):
+        thing = self.createThing(thingId)
+        
+        for colName, colIndex in self.pool.textColumns.items():
+            cell = row['columns'][colIndex]
+            thing.textData[colName]["value"] = self.__getDefinition(cell)
+            thing.textData[colName]["alternatives"] = self.__getAlternatives(cell)
+            thing.textData[colName]["hidden_alternatives"] = self.__getHiddenAlternatives(cell)
+            thing.textData[colName]["typing_corrects"] = self.__getTypingCorrects(cell)
+        
+        for colName, colIndex in self.pool.audioColumns.items():
+            cell = row['columns'][colIndex]
+            thing.audioUrls[colName] = map(fixUrl, self.__getUrls(cell))
+            
+        for colName, colIndex in self.pool.imageColumns.items():
+            cell = row['columns'][colIndex]
+            thing.imageUrls[colName] = map(fixUrl, self.__getUrls(cell))
+
+        for attrName, attrIndex in self.pool.attributes.items():
+            cell = row['attributes'][attrIndex]
+            thing.attributes[attrName] = self.__getAttribute(cell)
+
+        return thing
 
     @staticmethod
     def __getDefinition(cell):
@@ -133,8 +238,17 @@ class ThingDataLoader(object):
         data = []
         for alt in cell["alts"]:
             value = alt['val']
-            if value:
+            if value and not value.startswith(u"_"):
                 data.append(value)
+        return data
+    
+    @staticmethod
+    def __getHiddenAlternatives(cell):
+        data = []
+        for alt in cell["alts"]:
+            value = alt['val']
+            if value and value.startswith(u"_"):
+                data.append(value.lstrip(u'_'))
         return data
     
     @staticmethod
@@ -159,93 +273,13 @@ class ThingDataLoader(object):
     def __getAttribute(cell):
         return cell["val"]
 
-class ThingData(object):
-    def __init__(self):
-        self.textData = collections.OrderedDict()
-        self.audioUrls = collections.OrderedDict()
-        self.imageUrls = collections.OrderedDict()
-        self.attributes = collections.OrderedDict()
-    
-    def __getTextData(self, attr, start=None, stop=None):
-        return map(lambda x: x[attr], itertools.islice(self.textData.itervalues(), start, stop))
-    
-    def __getAlternatives(self, filterfunc, start=None, stop=None):
-        alternatives = filter(filterfunc, itertools.chain.from_iterable(self.__getTextData('alternatives', start, stop)))
-        typing_corrects = itertools.chain.from_iterable(self.__getTextData('typing_corrects', start, stop))
-        alternatives.extend(typing_corrects)
-        return alternatives
-
-    def getTargetDefinitions(self):
-        return self.__getTextData('value', 0, 1)
-
-    def getTargetAlternatives(self):
-        return self.__getAlternatives(lambda x: not x.startswith(u"_"), 0, 1)
-    
-    def getSourceDefinitions(self):
-        return self.__getTextData('value', 1)
-
-    def getSourceAlternatives(self):
-        return self.__getAlternatives(lambda x: not x.startswith(u"_"), 1)
-    
-    def getAttributes(self):
-        return filter(bool, self.attributes.values())
-
-    @staticmethod
-    def __getKeyFromIndex(keys, index):
-        if not isinstance(index, int):
-            return index
-        return keys[index]
-    
-    def getAudioUrls(self, name=None):
-        name = self.__getKeyFromIndex(self.getAudioColumnNames(), name)
-        if name:
-            return self.audioUrls[name]
-        return list(itertools.chain.from_iterable(self.audioUrls.values()))
-
-    def getImageUrls(self, name=None):
-        name = self.__getKeyFromIndex(self.getImageColumnNames(), name)
-        if name:
-            return self.imageUrls[name]
-        return list(itertools.chain.from_iterable(self.imageUrls.values()))
-    
-    def getImageColumnNames(self):
-        return self.imageUrls.keys()
-    
-    def getAudioColumnNames(self):
-        return self.audioUrls.keys()
-    
-    def getTextColumnNames(self):
-        return self.textData.keys()
-
-    def getAttributeNames(self):
-        return self.attributes.keys()
-
-    def getDefinition(self, name):
-        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
-        return self.textData[name]['value']
-    
-    def getAlternatives(self, name):
-        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
-        return filter(lambda x: not x.startswith(u"_"), self.textData[name]['alternatives'])
-    
-    def getAlternativesHidden(self, name):
-        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
-        return map(lambda x: x.lstrip(u'_'), filter(lambda x: x.startswith(u"_"), self.textData[name]['alternatives']))
-    
-    def getTypingCorrects(self, name):
-        name = self.__getKeyFromIndex(self.getTextColumnNames(), name)
-        return self.textData[name]['typing_corrects']
-
-    def getAttribute(self, name):
-        name = self.__getKeyFromIndex(self.getAttributeNames(), name)
-        return self.attributes[name]
-
 class CourseLoader(object):
     def __init__(self, service):
         self.service = service
         self.observers = []
         self.levelCount = 0
         self.thingCount = 0
+        self.pools = {}
     
     def registerObserver(self, observer):
         self.observers.append(observer)
@@ -254,7 +288,7 @@ class CourseLoader(object):
         for observer in self.observers:
             if hasattr(observer, signal):
                 getattr(observer, signal)(*attrs, **kwargs)
-        
+    
     def loadCourse(self, courseId):
         course = Course(courseId)
         
@@ -278,6 +312,25 @@ class CourseLoader(object):
         
         return course
     
+    @staticmethod
+    def loadPool(data):
+        pool = Pool(data["id"])
+        pool.name = data["name"]
+        
+        for index, column in sorted(data["columns"].items()):
+            if (column['kind'] == 'text'):
+                pool.textColumns[column['label']] = index
+            elif (column['kind'] == 'audio'):
+                pool.audioColumns[column['label']] = index
+            elif (column['kind'] == 'image'):
+                pool.imageColumns[column['label']] = index
+
+        for index, attribute in sorted(data["attributes"].items()):
+            if (attribute['kind'] == 'text'):
+                pool.attributes[attribute['label']] = index
+        
+        return pool
+    
     def loadLevel(self, course, levelIndex):
         levelData = self.service.loadLevelData(course.id, levelIndex)
         
@@ -287,14 +340,17 @@ class CourseLoader(object):
         level = Level(levelData["session"]["level"]["id"])
         level.index = levelData["session"]["level"]["index"]
         level.title = levelData["session"]["level"]["title"]
+        level.course = course
+        
         poolId = levelData["session"]["level"]["pool_id"]
-        
-        poolData = levelData["pools"][unicode(poolId)]
-        thingDataLoader = ThingDataLoader(poolData)
-        
+        if not poolId in self.pools:
+            self.pools[poolId] = self.loadPool(levelData["pools"][unicode(poolId)])
+        level.pool = self.pools[poolId]
+            
+        thingLoader = ThingLoader(level.pool)
         for thingId, thingRowData in levelData["things"].items():
-            thingData = thingDataLoader.load(thingRowData, self.service.toAbsoluteMediaUrl)
-            thing = Thing(thingId, thingData)
+            thing = thingLoader.loadThing(thingId, thingRowData, self.service.toAbsoluteMediaUrl)
+            thing.level = level
             level.things.append(thing)
             self.notify('thingLoaded', thing)
         

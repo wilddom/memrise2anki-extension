@@ -6,6 +6,9 @@ from aqt import mw
 from aqt.qt import *
 from functools import partial
 
+def camelize(content):
+	return u''.join(x for x in content.title() if x.isalpha())
+
 class MemriseCourseLoader(QObject):
 	totalCountChanged = pyqtSignal(int)
 	totalLoadedChanged = pyqtSignal(int)
@@ -30,8 +33,10 @@ class MemriseCourseLoader(QObject):
 			
 		def downloadMedia(self, thing):
 			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
-			thing.imageUrls = filter(None, map(download, thing.imageUrls))
-			thing.audioUrls = filter(None, map(download, thing.audioUrls))
+			for colName in thing.pool.getImageColumnNames():
+				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
+			for colName in thing.pool.getAudioColumnNames():
+				thing.setLocalAudioUrls(colName, filter(bool, map(download, thing.getAudioUrls(colName))))
 			
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
@@ -133,58 +138,268 @@ class MemriseLoginDialog(QDialog):
 		dialog = MemriseLoginDialog(memriseService)
 		return dialog.exec_() == QDialog.Accepted
 
-class FieldMappingDialog(QDialog):
-	def __init__(self):
-		super(FieldMappingDialog, self).__init__()
-		self.modelFields = {}
+class ModelMappingDialog(QDialog):
+	def __init__(self, col):
+		super(ModelMappingDialog, self).__init__()
+		self.col = col
+		self.models = {}
 		
-		self.setWindowTitle("Assign Memrise Field")
+		self.setWindowTitle("Note Type")
 		layout = QVBoxLayout(self)
 		
-		self.label = QLabel("Assign the memrise field to:")
+		layout.addWidget(QLabel("Select note type for newly imported notes:"))
+		
+		self.modelSelection = QComboBox()
+		layout.addWidget(self.modelSelection)
+		self.modelSelection.setToolTip("Either a new note type will be created or an existing one can be reused.")
+		
+		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
+		buttons.accepted.connect(self.accept)
+		layout.addWidget(buttons)
+	
+	def __fillModelSelection(self):
+		self.modelSelection.clear()
+		self.modelSelection.addItem("--- create new ---")
+		self.modelSelection.insertSeparator(1)
+		for name in sorted(self.col.models.allNames()):
+			self.modelSelection.addItem(name)
+	
+	def __createMemriseModel(self, course, pool):
+		mm = self.col.models
+				
+		name = u"Memrise {}".format(camelize(course.title))
+		m = mm.new(name)
+		
+		for colName in pool.getTextColumnNames():
+			dfm = mm.newField(colName)
+			mm.addField(m, dfm)
+			afm = mm.newField(u"{} {}".format(colName, _("Alternatives")))
+			mm.addField(m, afm)
+		
+		for attrName in pool.getAttributeNames():
+			fm = mm.newField(attrName)
+			mm.addField(m, fm)
+			
+		for colName in pool.getImageColumnNames():
+			fm = mm.newField(colName)
+			mm.addField(m, fm)
+		
+		for colName in pool.getAudioColumnNames():
+			fm = mm.newField(colName)
+			mm.addField(m, fm)
+		
+		fm = mm.newField(_("Level"))
+		mm.addField(m, fm)
+		
+		fm = mm.newField(_("Thing"))
+		mm.addField(m, fm)
+		
+		front = pool.getTextColumnName(0)
+		if pool.hasTextColumnName(camelize(course.source)):
+			front = camelize(course.source)
+		elif pool.hasTextColumnName(course.source):
+			front = course.source
+		frontAlternatives = u"{} {}".format(front, _("Alternatives"))
+		
+		back = pool.getTextColumnName(1)
+		if pool.hasTextColumnName(camelize(course.target)):
+			back = camelize(course.target)
+		elif pool.hasTextColumnName(course.target):
+			back = course.target
+		backAlternatives = u"{} {}".format(back, _("Alternatives"))
+		
+		m['css'] += "\n.alts {\n font-size: 14px;\n}"
+		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
+		
+		t = mm.newTemplate(u"{} -> {}".format(camelize(course.source), camelize(course.target)))
+		t['qfmt'] = u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
+		for colName in pool.getTextColumnNames():
+			if not colName in [front, back]:
+				t['qfmt'] += u"{{"+colName+u"}}\n"
+				altColName = u"{} {}".format(colName, _("Alternatives"))
+				t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
+		for attrName in pool.getAttributeNames():
+			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
+		for colName in pool.getImageColumnNames():
+			t['qfmt'] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
+		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
+		for colName in pool.getAudioColumnNames():
+			t['afmt'] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
+		mm.addTemplate(m, t)
+		
+		t = mm.newTemplate(u"{} -> {}".format(camelize(course.target), camelize(course.source)))
+		t['qfmt'] = u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
+		for colName in pool.getTextColumnNames():
+			if not colName in [front, back]:
+				t['qfmt'] += u"{{"+colName+u"}}\n"
+				altColName = u"{} {}".format(colName, _("Alternatives"))
+				t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
+		for attrName in pool.getAttributeNames():
+			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
+		for colName in pool.getAudioColumnNames():
+			t['qfmt'] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
+		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
+		for colName in pool.getImageColumnNames():
+			t['afmt'] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
+		mm.addTemplate(m, t)
+		
+		return m
+	
+	def __loadModel(self, thing, deck=None):
+		model = self.__createMemriseModel(thing.level.course, thing.pool)
+		
+		modelStored = self.col.models.byName(model['name'])
+		if modelStored:
+			if self.col.models.scmhash(modelStored) == self.col.models.scmhash(model):
+				model = modelStored
+			else:
+				model['name'] += u"-{}".format(uuid.uuid4())
+			
+		if deck and 'mid' in deck:
+			deckModel = self.col.models.get(deck['mid'])
+			if deckModel and self.col.models.scmhash(deckModel) == self.col.models.scmhash(model):
+				model = deckModel
+				
+		if model and not model['id']:
+			self.col.models.add(model)
+
+		return model
+	
+	def getModel(self, thing, deck):
+		if thing.pool.id in self.models:
+			return self.models[thing.pool.id]
+		
+		self.__fillModelSelection()
+		self.exec_()
+		
+		if self.modelSelection.currentIndex() == 0:
+			self.models[thing.pool.id] = self.__loadModel(thing, deck)
+		else:
+			modelName = self.modelSelection.currentText()
+			self.models[thing.pool.id] = self.col.models.byName(modelName)
+		
+		return self.models[thing.pool.id]
+
+class FieldMappingDialog(QDialog):
+	def __init__(self, col):
+		super(FieldMappingDialog, self).__init__()
+		self.col = col
+		self.mappings = {}
+		
+		self.setWindowTitle("Assign Memrise Fields")
+		layout = QVBoxLayout(self)
+		
+		self.label = QLabel("Define the field mapping for the selected note type.")
 		layout.addWidget(self.label)
 		
-		self.fieldSelection = QComboBox()
-		layout.addWidget(self.fieldSelection)
+		self.grid = QGridLayout()
+		layout.addLayout(self.grid)
 		
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		layout.addWidget(buttons)
 
-	def __setLabel(self, fieldname):
-		self.label.setText(u"Assign the memrise field <b>{}</b> to:".format(fieldname))
-	
-	def __setFields(self, fieldnames):
-		self.fieldSelection.clear()
-		self.fieldSelection.addItem("-- ignore --")
-		self.fieldSelection.insertSeparator(1)
-		for fieldname in fieldnames:
-			self.fieldSelection.addItem(fieldname)
+	@staticmethod
+	def clearLayout(layout):
+		while layout.count():
+			child = layout.takeAt(0)
+			if child.widget() is not None:
+				child.widget().deleteLater()
+			elif child.layout() is not None:
+				FieldMappingDialog.clearLayout(child.layout())
+
+	@staticmethod
+	def __findIndexWithData(combobox, predicate):
+		for index in range(0, combobox.count()):
+			data = combobox.itemData(index)
+			if predicate(data):
+				return index
+		return -1
+
+	def __createModelFieldSelection(self, fieldNames):
+		fieldSelection = QComboBox()
+		fieldSelection.addItem(u"--- None ---")
+		fieldSelection.insertSeparator(1)
+		for fieldName in fieldNames:
+			fieldSelection.addItem(fieldName)
+		return fieldSelection
+
+	def __createMemriseFieldSelection(self, pool):
+		fieldSelection = QComboBox()
+		fieldSelection.addItem(u"--- None ---")
+		fieldSelection.insertSeparator(1)
+		for colName in pool.getTextColumnNames():
+			fieldSelection.addItem(u"Text: {}".format(colName), {'type': 'text', 'sub': 'value', 'name': colName})
+			fieldSelection.addItem(u"Text: {} {}".format(colName, _("Alternatives")), {'type': 'text', 'sub': 'alternatives', 'name': colName})
+		for colName in pool.getImageColumnNames():
+			fieldSelection.addItem(u"Image: {}".format(colName), {'type': 'image', 'name': colName})
+		for colName in pool.getAudioColumnNames():
+			fieldSelection.addItem(u"Audio: {}".format(colName), {'type': 'audio', 'name': colName})
+		for attrName in pool.getAttributeNames():
+			fieldSelection.addItem(u"Attribute: {}".format(attrName), {'type': 'attribute', 'name': attrName})
+		return fieldSelection
+
+	def __buildGrid(self, pool, model):
+		self.clearLayout(self.grid)
+
+		self.grid.addWidget(QLabel("Note type fields:"), 0, 0)
+		self.grid.addWidget(QLabel("Memrise fields:"), 0, 1)
 		
-	def getFieldname(self, note, fieldname, allow=[]):
-		if not note.mid in self.modelFields:
-			self.modelFields[note.mid] = {}
+		def findIndex(data, name):
+			if not data:
+				return False
+			if name == data["name"]:
+				return True
+			if data["type"] == "text" and data["sub"] == "alternatives" and name == u"{} {}".format(data["name"], _("Alternatives")):
+				return True
+			return False
+				
+		fieldNames = filter(lambda fieldName: not fieldName in [_('Thing'), _('Level')], self.col.models.fieldNames(model))
+		poolFieldCount = pool.countTextColumns()*2 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
 		
-		if fieldname in self.modelFields[note.mid]:
-			return self.modelFields[note.mid][fieldname]
+		mapping = []
+		for index in range(0, max(len(fieldNames), poolFieldCount)):
+			modelFieldSelection = self.__createModelFieldSelection(fieldNames)
+			self.grid.addWidget(modelFieldSelection, index+1, 0)
+
+			memriseFieldSelection = self.__createMemriseFieldSelection(pool)
+			self.grid.addWidget(memriseFieldSelection, index+1, 1)
+			
+			if index < len(fieldNames):
+				modelFieldSelection.setCurrentIndex(index+2)
+			
+			fieldIndex = self.__findIndexWithData(memriseFieldSelection, partial(findIndex, name=modelFieldSelection.currentText()))
+			if fieldIndex >= 0:
+				memriseFieldSelection.setCurrentIndex(fieldIndex)
+			
+			mapping.append((modelFieldSelection, memriseFieldSelection))
 		
-		if fieldname in note.keys():
-			self.modelFields[note.mid][fieldname] = fieldname
-			return self.modelFields[note.mid][fieldname]
+		return mapping
 		
-		awailableFields = set(note.keys()) - (set(self.modelFields[note.mid].values()) - set(allow))
+	def getFieldMappings(self, pool, model):
+		if pool.id in self.mappings:
+			if model['id'] in self.mappings[pool.id]:
+				return self.mappings[pool.id][model['id']]
 		
-		self.__setLabel(fieldname)
-		self.__setFields(sorted(awailableFields))
+		selectionMapping = self.__buildGrid(pool, model)
 		self.exec_()
 		
-		if self.fieldSelection.currentIndex() == 0:
-			self.modelFields[note.mid][fieldname] = None
-		else:
-			self.modelFields[note.mid][fieldname] = self.fieldSelection.currentText()
+		mapping = {}
+		for modelFieldSelection, memriseFieldSelection in selectionMapping:
+			fieldName = None
+			if modelFieldSelection.currentIndex() >= 2:
+				fieldName = modelFieldSelection.currentText()
+			
+			data = None
+			if memriseFieldSelection.currentIndex() >= 2:
+				data = memriseFieldSelection.itemData(memriseFieldSelection.currentIndex())
+			
+			if fieldName and data:
+				mapping.setdefault(fieldName, []).append(data)
 		
-		return self.modelFields[note.mid][fieldname]
+		self.mappings.setdefault(pool.id, {})[model['id']] = mapping
 		
+		return mapping
 
 class MemriseImportDialog(QDialog):
 	def __init__(self, memriseService):
@@ -217,10 +432,10 @@ class MemriseImportDialog(QDialog):
 		self.skipExistingMediaCheckBox.setChecked(True)
 		
 		self.deckSelection = QComboBox()
-		self.deckSelection.addItem("")
+		self.deckSelection.addItem("--- create new ---")
+		self.deckSelection.insertSeparator(1)
 		for name in sorted(mw.col.decks.allNames(dyn=False)):
 			self.deckSelection.addItem(name)
-		self.deckSelection.setCurrentIndex(0)
 		deckSelectionTooltip = "<b>Updates a previously downloaded course.</b><br />In order for this to work the field <i>Thing</i> must not be removed or renamed, it is needed to identify existing notes."
 		self.deckSelection.setToolTip(deckSelectionTooltip)
 		label = QLabel("Update existing deck:")
@@ -255,7 +470,8 @@ class MemriseImportDialog(QDialog):
 		self.loader.totalLoadedChanged.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
 		
-		self.fieldMapper = FieldMappingDialog()
+		self.modelMapper = ModelMappingDialog(mw.col)
+		self.fieldMapper = FieldMappingDialog(mw.col)
 	
 	def prepareTitleTag(self, tag):
 		value = u''.join(x for x in tag.title() if x.isalnum())
@@ -285,83 +501,6 @@ class MemriseImportDialog(QDialog):
 	@staticmethod
 	def prepareImage(content):
 		return u'<img src="{:s}">'.format(content)
-	
-	@staticmethod
-	def camelize(content):
-		return u''.join(x for x in content.title() if x.isalpha())
-	
-	def createMemriseModel(self, col, course):
-		mm = col.models
-				
-		name = u"Memrise {}".format(self.camelize(course.title))
-		m = mm.new(name)
-		
-		source = self.camelize(course.source) or _("Front")
-		fm = mm.newField(source)
-		mm.addField(m, fm)
-		
-		target = self.camelize(course.target) or _("Back")
-		fm = mm.newField(target)
-		mm.addField(m, fm)
-		
-		sourceAlternatives = u"{} {}".format(source, _("Alternatives"))
-		fm = mm.newField(sourceAlternatives)
-		mm.addField(m, fm)
-		
-		targetAlternatives = u"{} {}".format(target, _("Alternatives"))
-		fm = mm.newField(targetAlternatives)
-		mm.addField(m, fm)
-		
-		fm = mm.newField(_("Attributes"))
-		mm.addField(m, fm)
-		
-		fm = mm.newField(_("Audio"))
-		mm.addField(m, fm)
-		
-		fm = mm.newField(_("Image"))
-		mm.addField(m, fm)
-		
-		fm = mm.newField(_("Level"))
-		mm.addField(m, fm)
-		
-		fm = mm.newField(_("Thing"))
-		mm.addField(m, fm)
-		
-		m['css'] += "\n.alts {\n font-size: 14px;\n}"
-		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
-		
-		t = mm.newTemplate(u"{} -> {}".format(source, target))
-		t['qfmt'] = u"{{"+source+u"}}\n"+u"{{#"+sourceAlternatives+u"}}<br /><span class=\"alts\">{{"+sourceAlternatives+u"}}</span>{{/"+sourceAlternatives+u"}}\n"+u"{{#Attributes}}<br /><span class=\"attrs\">({{Attributes}})</span>{{/Attributes}}\n"+u"{{#Image}}<br />{{Image}}{{/Image}}"
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+target+u"}}\n{{#"+targetAlternatives+u"}}<br /><span class=\"alts\">{{"+targetAlternatives+u"}}</span>{{/"+targetAlternatives+u"}}\n{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
-		mm.addTemplate(m, t)
-		
-		t = mm.newTemplate(u"{} -> {}".format(target, source))
-		t['qfmt'] =  u"{{"+target+u"}}\n"+u"{{#"+targetAlternatives+u"}}<br /><span class=\"alts\">{{"+targetAlternatives+u"}}</span>{{/"+targetAlternatives+u"}}\n"+u"{{#Attributes}}<br /><span class=\"attrs\">({{Attributes}})</span>{{/Attributes}}\n"+u"{{#Audio}}<div style=\"display:none;\">{{Audio}}</div>{{/Audio}}"
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+source+u"}}\n{{#"+sourceAlternatives+u"}}<br /><span class=\"alts\">{{"+sourceAlternatives+u"}}</span>{{/"+sourceAlternatives+u"}}\n{{#Image}}<br />{{Image}}{{/Image}}"
-		mm.addTemplate(m, t)
-		
-		return m
-	
-	def selectModel(self, course, deck=None):
-		model = self.createMemriseModel(mw.col, course)
-		
-		modelStored = mw.col.models.byName(model['name'])
-		if modelStored:
-			if mw.col.models.scmhash(modelStored) == mw.col.models.scmhash(model):
-				model = modelStored
-			else:
-				model['name'] += u"-{}".format(uuid.uuid4())
-			
-		if deck and 'mid' in deck:
-			deckModel = mw.col.models.get(deck['mid'])
-			if deckModel and mw.col.models.scmhash(deckModel) == mw.col.models.scmhash(model):
-				model = deckModel
-				
-		if model and not model['id']:
-			mw.col.models.add(model)
-
-		mw.col.models.setCurrent(model)
-		return model
 	
 	def selectDeck(self, name, merge=False):
 		did = mw.col.decks.id(name, create=False)
@@ -398,14 +537,27 @@ class MemriseImportDialog(QDialog):
 		if notes:
 			return mw.col.getNote(notes[0])
 		
-		fields = [(self.camelize(course.source), self.camelize(course.target)), (_('Front'), _('Back')), ('Front', 'Back')]
+		fields = [(camelize(course.source), camelize(course.target)), (thing.pool.getTextColumnName(0), thing.pool.getTextColumnName(1)), (_('Front'), _('Back')), ('Front', 'Back')]
 		for pair in fields:
-			notes = mw.col.findNotes(u'deck:"{}" "{}:{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.sourceDefinitions), pair[1], u"<br/>".join(thing.targetDefinitions)))
+			notes = mw.col.findNotes(u'deck:"{}" "{}:{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.getDefinitions(0,1)), pair[1], u"<br/>".join(thing.getDefinitions(1, None))))
 			if notes:
 				return mw.col.getNote(notes[0])
 			
 		return None
 
+	def getWithSpec(self, thing, spec):
+		if spec['type'] == 'text' and spec['sub'] == 'value':
+			return self.prepareText(thing.getDefinition(spec['name']))
+		elif spec['type'] == 'text' and spec['sub'] == 'alternatives':
+			return map(self.prepareText, thing.getAlternatives(spec['name']))
+		elif spec['type'] == 'image':
+			return map(self.prepareImage, thing.getLocalImageUrls(spec['name']))
+		elif spec['type'] == 'audio':
+			return map(self.prepareAudio, thing.getLocalAudioUrls(spec['name']))
+		elif spec['type'] == 'attribute':
+			return self.prepareText(thing.getAttribute(spec['name']))
+		return None
+	
 	def importCourse(self):
 		if self.loader.isError():
 			self.buttons.show()
@@ -421,9 +573,7 @@ class MemriseImportDialog(QDialog):
 			deck = self.selectDeck(self.deckSelection.currentText(), merge=True)
 		else:
 			deck = self.selectDeck(course.title, merge=False)
-		model = self.selectModel(course, deck)
 		self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
-		self.saveDeckModelRelation(deck, model)
 				
 		for level in course:
 			tags = self.getLevelTags(len(course), level)
@@ -432,54 +582,31 @@ class MemriseImportDialog(QDialog):
 					ankiNote = noteCache[thing.id]
 				else:
 					ankiNote = self.findExistingNote(deck['name'], course, thing)
-					if not ankiNote:
-						ankiNote = mw.col.newNote()
-					
-				frontField = self.fieldMapper.getFieldname(ankiNote, self.camelize(course.source))
-				if frontField:
-					ankiNote[frontField] = u"<br/>".join(map(self.prepareText, thing.sourceDefinitions))
+				if not ankiNote:
+					model = self.modelMapper.getModel(thing, deck)
+					self.saveDeckModelRelation(deck, model)
+					ankiNote = mw.col.newNote()
 				
-				frontAlternativesField = self.fieldMapper.getFieldname(ankiNote, u"{} {}".format(self.camelize(course.source), _("Alternatives")))
-				if frontAlternativesField:
-					ankiNote[frontAlternativesField] = u", ".join(map(self.prepareText, thing.sourceAlternatives))
-						
-				backField = self.fieldMapper.getFieldname(ankiNote, self.camelize(course.target))
-				if backField:
-					ankiNote[backField] = u"<br/>".join(map(self.prepareText, thing.targetDefinitions))
-				
-				backAlternativesField = self.fieldMapper.getFieldname(ankiNote, u"{} {}".format(self.camelize(course.target), _("Alternatives")))
-				if backAlternativesField:
-					ankiNote[backAlternativesField] = u", ".join(map(self.prepareText, thing.targetAlternatives))
-
-				attributesField = self.fieldMapper.getFieldname(ankiNote, _('Attributes'))
-				if attributesField:
-					ankiNote[attributesField] = u", ".join(map(self.prepareText, thing.attributes))
-
-				if self.downloadMediaCheckBox.isChecked():
-					audios = map(self.prepareAudio, thing.audioUrls)
-					audioField = self.fieldMapper.getFieldname(ankiNote, _('Audio'), [frontField, backField])
-					if audioField:
-						if audioField in [frontField, backField]:
-							ankiNote[audioField] = u"<br/>".join([ankiNote[audioField]]+audios)
+				mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
+				for field, data in mapping.iteritems():
+					values = []
+					for spec in data:
+						value = self.getWithSpec(thing, spec)
+						if hasattr(value, '__iter__'):
+							if len(value):
+								values.extend(value)
 						else:
-							ankiNote[audioField] = u'\n'.join(audios)
-					
-					images = map(self.prepareImage, thing.imageUrls)
-					imageField = self.fieldMapper.getFieldname(ankiNote, _('Image'), [frontField, backField])
-					if imageField:
-						if imageField in [frontField, backField]:
-							ankiNote[imageField] = u"<br/>".join([ankiNote[imageField]]+images)
-						else:
-							ankiNote[imageField] = u'\n'.join(images)
+							if value:
+								values.append(value)
+					ankiNote[field] = u", ".join(values)
 
-				levelField = self.fieldMapper.getFieldname(ankiNote, _('Level'))
-				if levelField:
-					levels = set(filter(bool, map(unicode.strip, ankiNote[levelField].split(u','))))
+				if _('Level') in ankiNote.keys():
+					levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
 					levels.add(str(level.index))
-					ankiNote[levelField] = u', '.join(levels)
+					ankiNote[_('Level')] = u', '.join(levels)
 				
-				if 'Thing' in ankiNote.keys():
-					ankiNote['Thing'] = thing.id
+				if _('Thing') in ankiNote.keys():
+					ankiNote[_('Thing')] = thing.id
 				
 				for tag in tags:
 					ankiNote.addTag(tag)
