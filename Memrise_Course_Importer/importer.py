@@ -175,6 +175,10 @@ class ModelMappingDialog(QDialog):
 			mm.addField(m, dfm)
 			afm = mm.newField(u"{} {}".format(colName, _("Alternatives")))
 			mm.addField(m, afm)
+			hafm = mm.newField(u"{} {}".format(colName, _("Hidden Alternatives")))
+			mm.addField(m, hafm)
+			tcfm = mm.newField(u"{} {}".format(colName, _("Typing Corrects")))
+			mm.addField(m, tcfm)
 		
 		for attrName in pool.getAttributeNames():
 			fm = mm.newField(attrName)
@@ -330,7 +334,9 @@ class FieldMappingDialog(QDialog):
 		fieldSelection.insertSeparator(1)
 		for colName in pool.getTextColumnNames():
 			fieldSelection.addItem(u"Text: {}".format(colName), {'type': 'text', 'sub': 'value', 'name': colName})
-			fieldSelection.addItem(u"Text: {} {}".format(colName, _("Alternatives")), {'type': 'text', 'sub': 'alternatives', 'name': colName})
+			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Alternatives")), {'type': 'text', 'sub': 'alternatives', 'name': colName})
+			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Hidden Alternatives")), {'type': 'text', 'sub': 'hidden_alternatives', 'name': colName})
+			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Typing Corrects")), {'type': 'text', 'sub': 'typing_corrects', 'name': colName})
 		for colName in pool.getImageColumnNames():
 			fieldSelection.addItem(u"Image: {}".format(colName), {'type': 'image', 'name': colName})
 		for colName in pool.getAudioColumnNames():
@@ -351,6 +357,10 @@ class FieldMappingDialog(QDialog):
 			if name == data["name"]:
 				return True
 			if data["type"] == "text" and data["sub"] == "alternatives" and name == u"{} {}".format(data["name"], _("Alternatives")):
+				return True
+			if data["type"] == "text" and data["sub"] == "hidden_alternatives" and name == u"{} {}".format(data["name"], _("Hidden Alternatives")):
+				return True
+			if data["type"] == "text" and data["sub"] == "typing_corrects" and name == u"{} {}".format(data["name"], _("Typing Corrects")):
 				return True
 			return False
 				
@@ -551,6 +561,10 @@ class MemriseImportDialog(QDialog):
 			return self.prepareText(thing.getDefinition(spec['name']))
 		elif spec['type'] == 'text' and spec['sub'] == 'alternatives':
 			return map(self.prepareText, thing.getAlternatives(spec['name']))
+		elif spec['type'] == 'text' and spec['sub'] == 'hidden_alternatives':
+			return map(self.prepareText, thing.getHiddenAlternatives(spec['name']))
+		elif spec['type'] == 'text' and spec['sub'] == 'typing_corrects':
+			return map(self.prepareText, thing.getTypingCorrects(spec['name']))
 		elif spec['type'] == 'image':
 			return map(self.prepareImage, thing.getLocalImageUrls(spec['name']))
 		elif spec['type'] == 'audio':
