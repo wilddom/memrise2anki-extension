@@ -381,6 +381,7 @@ class FieldMappingDialog(QDialog):
 			if model['id'] in self.mappings[pool.id]:
 				return self.mappings[pool.id][model['id']]
 		
+		self.label.setText(u'Define the field mapping for the note type "{}".'.format(model["name"]))
 		selectionMapping = self.__buildGrid(pool, model)
 		self.exec_()
 		
