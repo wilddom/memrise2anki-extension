@@ -12,6 +12,11 @@ def camelize(content):
 class MemriseCourseLoader(QObject):
 	totalCountChanged = pyqtSignal(int)
 	totalLoadedChanged = pyqtSignal(int)
+	levelCountChanged = pyqtSignal(int)
+	levelsLoadedChanged = pyqtSignal(int)
+	thingCountChanged = pyqtSignal(int)
+	thingsLoadedChanged = pyqtSignal(int)
+	
 	finished = pyqtSignal()
 	
 	class RunnableWrapper(QRunnable):
@@ -26,8 +31,12 @@ class MemriseCourseLoader(QObject):
 			self.sender = sender
 			self.totalCount = 0
 			self.totalLoaded = 0
+			self.thingsLoaded = 0
+			self.levelsLoaded = 0
 		
 		def levelLoaded(self, levelIndex, level=None):
+			self.levelsLoaded += 1
+			self.sender.levelsLoadedChanged.emit(self.levelsLoaded)
 			self.totalLoaded += 1
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
@@ -41,14 +50,18 @@ class MemriseCourseLoader(QObject):
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
 				self.downloadMedia(thing)
+			self.thingsLoaded += 1
+			self.sender.thingsLoadedChanged.emit(self.thingsLoaded)
 			self.totalLoaded += 1
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 		
 		def levelCountChanged(self, levelCount):
+			self.sender.levelCountChanged.emit(levelCount)
 			self.totalCount += levelCount
 			self.sender.totalCountChanged.emit(self.totalCount)
 			
 		def thingCountChanged(self, thingCount):
+			self.sender.thingCountChanged.emit(thingCount)
 			self.totalCount += thingCount
 			self.sender.totalCountChanged.emit(self.totalCount)
 		
@@ -474,11 +487,11 @@ class MemriseImportDialog(QDialog):
 		
 		def setTotalCount(progressBar, totalCount):
 			progressBar.setRange(0, totalCount)
-			progressBar.setFormat("%p% (%v/%m)")
+			progressBar.setFormat("Downloading: %p% (%v/%m)")
 		
 		self.loader = MemriseCourseLoader(memriseService)
-		self.loader.totalCountChanged.connect(partial(setTotalCount, self.progressBar))
-		self.loader.totalLoadedChanged.connect(self.progressBar.setValue)
+		self.loader.thingCountChanged.connect(partial(setTotalCount, self.progressBar))
+		self.loader.thingsLoadedChanged.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
 		
 		self.modelMapper = ModelMappingDialog(mw.col)
@@ -579,6 +592,9 @@ class MemriseImportDialog(QDialog):
 			self.progressBar.hide()
 			raise self.loader.getError()
 		
+		self.progressBar.setValue(0)
+		self.progressBar.setFormat("Importing: %p% (%v/%m)")
+		
 		course = self.loader.getResult()
 		
 		noteCache = {}
@@ -630,6 +646,9 @@ class MemriseImportDialog(QDialog):
 					mw.col.addNote(ankiNote)
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
+				
+				self.progressBar.setValue(self.progressBar.value()+1)
+				QApplication.processEvents()
 		
 		mw.col.reset()
 		mw.reset()
