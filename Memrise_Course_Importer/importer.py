@@ -180,7 +180,7 @@ class ModelMappingDialog(QDialog):
 	def __createMemriseModel(self, course, pool):
 		mm = self.col.models
 				
-		name = u"Memrise {}".format(camelize(course.title))
+		name = u"Memrise {}".format(course.title)
 		m = mm.new(name)
 		
 		for colName in pool.getTextColumnNames():
