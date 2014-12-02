@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 
-import memrise, cookielib, os.path, uuid
+import memrise, cookielib, os.path, uuid, sys
 from anki.media import MediaManager
 from aqt import mw
 from aqt.qt import *
@@ -77,7 +77,7 @@ class MemriseCourseLoader(QObject):
 		self.url = ""
 		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
 		self.result = None
-		self.error = False
+		self.exc_info = (None,None,None)
 		self.downloadMedia = True
 		self.skipExistingMedia = True
 	
@@ -92,18 +92,21 @@ class MemriseCourseLoader(QObject):
 	def getResult(self):
 		return self.result
 	
-	def getError(self):
-		return self.error
+	def getException(self):
+		return self.self.exc_info[1]
 	
-	def isError(self):
-		return isinstance(self.error, Exception)
+	def getExceptionInfo(self):
+		return self.exc_info
+	
+	def isException(self):
+		return isinstance(self.exc_info[1], Exception)
 	
 	def run(self):
 		try:
 			course = self.memriseService.loadCourse(self.url, MemriseCourseLoader.Observer(self))
 			self.result = course
-		except Exception as e:
-			self.error = e
+		except Exception:
+			self.exc_info = sys.exc_info()
 		self.finished.emit()
 
 class MemriseLoginDialog(QDialog):
@@ -587,10 +590,11 @@ class MemriseImportDialog(QDialog):
 		return None
 	
 	def importCourse(self):
-		if self.loader.isError():
+		if self.loader.isException():
 			self.buttons.show()
 			self.progressBar.hide()
-			raise self.loader.getError()
+			exc_info = self.loader.getExceptionInfo()
+			raise exc_info[0], exc_info[1], exc_info[2]
 		
 		self.progressBar.setValue(0)
 		self.progressBar.setFormat("Importing: %p% (%v/%m)")
