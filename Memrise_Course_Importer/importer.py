@@ -183,7 +183,7 @@ class ModelMappingDialog(QDialog):
 	def __createMemriseModel(self, course, pool):
 		mm = self.col.models
 				
-		name = u"Memrise {}".format(course.title)
+		name = u"Memrise - {}".format(course.title)
 		m = mm.new(name)
 		
 		for colName in pool.getTextColumnNames():
@@ -273,7 +273,7 @@ class ModelMappingDialog(QDialog):
 			if self.col.models.scmhash(modelStored) == self.col.models.scmhash(model):
 				model = modelStored
 			else:
-				model['name'] += u"-{}".format(uuid.uuid4())
+				model['name'] += u" ({})".format(uuid.uuid4())
 			
 		if deck and 'mid' in deck:
 			deckModel = self.col.models.get(deck['mid'])
