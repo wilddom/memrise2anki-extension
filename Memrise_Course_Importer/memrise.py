@@ -318,16 +318,18 @@ class CourseLoader(object):
         pool.name = data["name"]
         
         for index, column in sorted(data["columns"].items()):
+            key = '{}:{}'.format(index, column['label'])
             if (column['kind'] == 'text'):
-                pool.textColumns[column['label']] = index
+                pool.textColumns[key] = index
             elif (column['kind'] == 'audio'):
-                pool.audioColumns[column['label']] = index
+                pool.audioColumns[key] = index
             elif (column['kind'] == 'image'):
-                pool.imageColumns[column['label']] = index
+                pool.imageColumns[key] = index
 
         for index, attribute in sorted(data["attributes"].items()):
             if (attribute['kind'] == 'text'):
-                pool.attributes[attribute['label']] = index
+                key = '{}:{}'.format(index, attribute['label'])
+                pool.attributes[key] = index
         
         return pool
     
