@@ -273,6 +273,18 @@ class ThingLoader(object):
     def __getAttribute(cell):
         return cell["val"]
 
+class NameUniquifier(object):
+    def __init__(self):
+        self.names = {}
+
+    def __call__(self, key):
+        if key not in self.names:
+            self.names[key] = 1
+            return key
+
+        self.names[key] += 1
+        return u"{} {}".format(key, self.names[key])
+
 class CourseLoader(object):
     def __init__(self, service):
         self.service = service
@@ -317,8 +329,9 @@ class CourseLoader(object):
         pool = Pool(data["id"])
         pool.name = data["name"]
         
+        uniquifyColumnName = NameUniquifier()
         for index, column in sorted(data["columns"].items()):
-            key = '{}:{}'.format(index, column['label'])
+            key = uniquifyColumnName(column['label'])
             if (column['kind'] == 'text'):
                 pool.textColumns[key] = index
             elif (column['kind'] == 'audio'):
@@ -326,9 +339,10 @@ class CourseLoader(object):
             elif (column['kind'] == 'image'):
                 pool.imageColumns[key] = index
 
+        uniquifyAttributeName = NameUniquifier()
         for index, attribute in sorted(data["attributes"].items()):
             if (attribute['kind'] == 'text'):
-                key = '{}:{}'.format(index, attribute['label'])
+                key = uniquifyAttributeName(attribute['label'])
                 pool.attributes[key] = index
         
         return pool
