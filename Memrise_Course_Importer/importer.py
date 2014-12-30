@@ -448,9 +448,12 @@ class MemriseImportDialog(QDialog):
 		self.minimalLevelTagWidthSpinBox.setValue(2)
 		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
-		self.suspendIgnoredWordsCheckBox = QCheckBox("Suspend ignored words")
-		layout.addWidget(self.suspendIgnoredWordsCheckBox)
-		self.suspendIgnoredWordsCheckBox.setChecked(True)
+		self.ignoredWordsAction = QComboBox()
+		self.ignoredWordsAction.addItem("Suspend")
+		self.ignoredWordsAction.addItem("Skip")
+		self.ignoredWordsAction.addItem("Add")
+		layout.addWidget(QLabel("Ignored words:"))
+		layout.addWidget(self.ignoredWordsAction)
 
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
@@ -617,6 +620,9 @@ class MemriseImportDialog(QDialog):
 		for level in course:
 			tags = self.getLevelTags(len(course), level)
 			for thing in level:
+				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Skip':
+					continue
+
 				if thing.id in noteCache:
 					ankiNote = noteCache[thing.id]
 				else:
@@ -655,7 +661,7 @@ class MemriseImportDialog(QDialog):
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
 
-				if self.suspendIgnoredWordsCheckBox.isChecked() and thing.isIgnored:
+				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Suspend':
 					mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
 				
 				self.progressBar.setValue(self.progressBar.value()+1)
