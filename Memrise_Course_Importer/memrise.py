@@ -112,6 +112,7 @@ class Thing(object):
         self.localImageUrls = collections.OrderedDict()
 
         self.isIgnored = False
+        self.ivl = None
     
     def getAudioUrls(self, nameOrIndex):
         name = self.pool.getAudioColumnName(nameOrIndex)
@@ -231,6 +232,7 @@ class ThingLoader(object):
 
         if userData:
             thing.isIgnored = userData['ignored']
+            thing.ivl = int(userData['interval'])
 
         return thing
 
