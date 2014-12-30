@@ -667,6 +667,7 @@ class MemriseImportDialog(QDialog):
 				if thing.ivl is not None:
 					for card in ankiNote.cards():
 						card.ivl = thing.ivl
+						card.queue = 2
 						card.flush()
 
 				self.progressBar.setValue(self.progressBar.value()+1)
