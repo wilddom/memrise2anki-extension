@@ -661,14 +661,14 @@ class MemriseImportDialog(QDialog):
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
 
-				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Suspend':
-					mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
-
 				if thing.ivl is not None:
 					for card in ankiNote.cards():
 						card.ivl = thing.ivl
 						card.queue = 2
 						card.flush()
+
+				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Suspend':
+					mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
 
 				self.progressBar.setValue(self.progressBar.value()+1)
 				QApplication.processEvents()
