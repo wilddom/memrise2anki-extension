@@ -110,6 +110,8 @@ class Thing(object):
         
         self.localAudioUrls = collections.OrderedDict()
         self.localImageUrls = collections.OrderedDict()
+
+        self.isIgnored = False
     
     def getAudioUrls(self, nameOrIndex):
         name = self.pool.getAudioColumnName(nameOrIndex)
@@ -205,7 +207,7 @@ class ThingLoader(object):
             
         return thing
     
-    def loadThing(self, thingId, row, fixUrl=lambda url: url):
+    def loadThing(self, thingId, row, userData=None, fixUrl=lambda url: url):
         thing = self.createThing(thingId)
         
         for colName, colIndex in self.pool.textColumns.items():
@@ -226,6 +228,9 @@ class ThingLoader(object):
         for attrName, attrIndex in self.pool.attributes.items():
             cell = row['attributes'][attrIndex]
             thing.attributes[attrName] = self.__getAttribute(cell)
+
+        if userData:
+            thing.isIgnored = userData['ignored']
 
         return thing
 
@@ -357,15 +362,18 @@ class CourseLoader(object):
         level.index = levelData["session"]["level"]["index"]
         level.title = levelData["session"]["level"]["title"]
         level.course = course
-        
+
         poolId = levelData["session"]["level"]["pool_id"]
         if not poolId in self.pools:
             self.pools[poolId] = self.loadPool(levelData["pools"][unicode(poolId)])
         level.pool = self.pools[poolId]
-            
+
+        thingUsers = { str(userData['thing_id']): userData for userData in levelData["thingusers"] }
+
         thingLoader = ThingLoader(level.pool)
         for thingId, thingRowData in levelData["things"].items():
-            thing = thingLoader.loadThing(thingId, thingRowData, self.service.toAbsoluteMediaUrl)
+            thingUserData = thingUsers.get(thingId)
+            thing = thingLoader.loadThing(thingId, thingRowData, thingUserData, self.service.toAbsoluteMediaUrl)
             thing.level = level
             level.things.append(thing)
             self.notify('thingLoaded', thing)

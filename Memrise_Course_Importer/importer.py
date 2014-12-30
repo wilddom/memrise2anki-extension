@@ -448,6 +448,10 @@ class MemriseImportDialog(QDialog):
 		self.minimalLevelTagWidthSpinBox.setValue(2)
 		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
+		self.suspendIgnoredWordsCheckBox = QCheckBox("Suspend ignored words")
+		layout.addWidget(self.suspendIgnoredWordsCheckBox)
+		self.suspendIgnoredWordsCheckBox.setChecked(True)
+
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
 		
@@ -650,6 +654,9 @@ class MemriseImportDialog(QDialog):
 					mw.col.addNote(ankiNote)
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
+
+				if self.suspendIgnoredWordsCheckBox.isChecked() and thing.isIgnored:
+					mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
 				
 				self.progressBar.setValue(self.progressBar.value()+1)
 				QApplication.processEvents()
