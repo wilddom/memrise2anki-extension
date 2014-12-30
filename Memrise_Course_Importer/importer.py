@@ -458,6 +458,10 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(QLabel("Ignored words:"))
 		layout.addWidget(self.ignoredWordsAction)
 
+		self.importIntervalsCheckBox = QCheckBox("Import intervals")
+		self.importIntervalsCheckBox.setChecked(True)
+		layout.addWidget(self.importIntervalsCheckBox)
+
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
 		
@@ -664,7 +668,7 @@ class MemriseImportDialog(QDialog):
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
 
-				if thing.ivl is not None:
+				if self.importIntervalsCheckBox.isChecked() and thing.ivl is not None:
 					for card in ankiNote.cards():
 						card.ivl = thing.ivl
 						card.queue = 2
