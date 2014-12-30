@@ -41,6 +41,8 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
+			if thing.isIgnored and self.sender.skipIgnoredWords:
+				return
 			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for colName in thing.pool.getImageColumnNames():
 				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
@@ -80,6 +82,7 @@ class MemriseCourseLoader(QObject):
 		self.exc_info = (None,None,None)
 		self.downloadMedia = True
 		self.skipExistingMedia = True
+		self.skipIgnoredWords = False
 	
 	def load(self, url):
 		self.url = url
@@ -689,6 +692,7 @@ class MemriseImportDialog(QDialog):
 		courseUrl = self.courseUrlLineEdit.text()
 		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
 		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
+		self.loader.skipIgnoredWords = self.ignoredWordsAction.currentText() == 'Skip'
 		self.loader.start(courseUrl)
 
 def startCourseImporter():
