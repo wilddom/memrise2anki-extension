@@ -34,14 +34,50 @@ class Level(object):
     def __len__(self):
         return len(self.things)
 
+class NameUniquifier(object):
+    def __init__(self):
+        self.names = {}
+
+    def __call__(self, key):
+        if key not in self.names:
+            self.names[key] = 1
+            return key
+
+        self.names[key] += 1
+        return u"{} {}".format(key, self.names[key])
+
 class Pool(object):
     def __init__(self, poolId=None):
         self.id = poolId
         self.name = ''
+
         self.textColumns = collections.OrderedDict()
         self.audioColumns = collections.OrderedDict()
         self.imageColumns = collections.OrderedDict()
         self.attributes = collections.OrderedDict()
+
+        self.columnNamesIndex = {}
+        self.uniquifyName = NameUniquifier()
+
+    def addColumn(self, colType, name, index):
+        key = self.uniquifyName(name)
+        if colType == 'text':
+            self.textColumns[key] = index
+        elif colType == 'audio':
+            self.audioColumns[key] = index
+        elif colType == 'image':
+            self.imageColumns[key] = index
+        else:
+            return
+        self.columnNamesIndex[unicode(index)] = key
+
+    def addAttribute(self, attrType, name, index):
+        key = self.uniquifyName(name)
+        if attrType == 'text':
+            self.attributes[key] = index
+
+    def getColumnName(self, index):
+        return self.columnNamesIndex.get(unicode(index))
 
     def getTextColumnNames(self):
         return self.textColumns.keys()
@@ -273,18 +309,6 @@ class ThingLoader(object):
     def __getAttribute(cell):
         return cell["val"]
 
-class NameUniquifier(object):
-    def __init__(self):
-        self.names = {}
-
-    def __call__(self, key):
-        if key not in self.names:
-            self.names[key] = 1
-            return key
-
-        self.names[key] += 1
-        return u"{} {}".format(key, self.names[key])
-
 class CourseLoader(object):
     def __init__(self, service):
         self.service = service
@@ -329,21 +353,11 @@ class CourseLoader(object):
         pool = Pool(data["id"])
         pool.name = data["name"]
         
-        uniquifyColumnName = NameUniquifier()
         for index, column in sorted(data["columns"].items()):
-            key = uniquifyColumnName(column['label'])
-            if (column['kind'] == 'text'):
-                pool.textColumns[key] = index
-            elif (column['kind'] == 'audio'):
-                pool.audioColumns[key] = index
-            elif (column['kind'] == 'image'):
-                pool.imageColumns[key] = index
+            pool.addColumn(column['kind'], column['label'], index)
 
-        uniquifyAttributeName = NameUniquifier()
         for index, attribute in sorted(data["attributes"].items()):
-            if (attribute['kind'] == 'text'):
-                key = uniquifyAttributeName(attribute['label'])
-                pool.attributes[key] = index
+            pool.addAttribute(attribute['kind'], attribute['label'], index)
         
         return pool
     
