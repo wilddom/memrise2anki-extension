@@ -436,32 +436,6 @@ class MemriseImportDialog(QDialog):
 		self.setWindowTitle("Import Memrise Course")
 		layout = QVBoxLayout(self)
 		
-		layout.addWidget(QLabel("Enter the home URL of the Memrise course to import\n(e.g. http://www.memrise.com/course/77958/memrise-intro-french/):"))
-		
-		self.courseUrlLineEdit = QLineEdit()
-		layout.addWidget(self.courseUrlLineEdit)
-		
-		layout.addWidget(QLabel("Minimal level tag width filled width zeros (e.g. 3 results in Level001):"))
-		self.minimalLevelTagWidthSpinBox = QSpinBox()
-		self.minimalLevelTagWidthSpinBox.setMinimum(1)
-		self.minimalLevelTagWidthSpinBox.setMaximum(9)
-		self.minimalLevelTagWidthSpinBox.setValue(2)
-		layout.addWidget(self.minimalLevelTagWidthSpinBox)
-
-		self.importScheduleCheckBox = QCheckBox("Import scheduler information")
-		self.importScheduleCheckBox.setChecked(True)
-		layout.addWidget(self.importScheduleCheckBox)
-
-		self.downloadMediaCheckBox = QCheckBox("Download media files")
-		layout.addWidget(self.downloadMediaCheckBox)
-		
-		self.skipExistingMediaCheckBox = QCheckBox("Skip download of existing media files")
-		layout.addWidget(self.skipExistingMediaCheckBox)
-		
-		self.downloadMediaCheckBox.stateChanged.connect(self.skipExistingMediaCheckBox.setEnabled)
-		self.downloadMediaCheckBox.setChecked(True)
-		self.skipExistingMediaCheckBox.setChecked(True)
-		
 		self.deckSelection = QComboBox()
 		self.deckSelection.addItem("--- create new ---")
 		self.deckSelection.insertSeparator(1)
@@ -474,10 +448,43 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(label)
 		layout.addWidget(self.deckSelection)
 		self.deckSelection.currentIndexChanged.connect(self.loadDeckUrl)
+		
+		label = QLabel("Enter the home URL of the Memrise course to import:")
+		self.courseUrlLineEdit = QLineEdit()
+		courseUrlTooltip = "e.g. http://www.memrise.com/course/77958/memrise-intro-french/"
+		label.setToolTip(courseUrlTooltip)
+		self.courseUrlLineEdit.setToolTip(courseUrlTooltip)
+		layout.addWidget(label)
+		layout.addWidget(self.courseUrlLineEdit)
+		
+		label = QLabel("Minimal level tag width filled width zeros:")
+		self.minimalLevelTagWidthSpinBox = QSpinBox()
+		self.minimalLevelTagWidthSpinBox.setMinimum(1)
+		self.minimalLevelTagWidthSpinBox.setMaximum(9)
+		self.minimalLevelTagWidthSpinBox.setValue(2)
+		minimalLevelTagWidthTooltip = "e.g. 3 results in Level001"
+		label.setToolTip(minimalLevelTagWidthTooltip)
+		self.minimalLevelTagWidthSpinBox.setToolTip(minimalLevelTagWidthTooltip)
+		layout.addWidget(label)
+		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 
+		self.importScheduleCheckBox = QCheckBox("Import scheduler information")
+		self.importScheduleCheckBox.setChecked(True)
+		self.importScheduleCheckBox.setToolTip("e.g. next due date, interval, etc.")
+		layout.addWidget(self.importScheduleCheckBox)
 		def setScheduler(checkbox, predicate, index):
 			checkbox.setChecked(predicate(index))
 		self.deckSelection.currentIndexChanged.connect(partial(setScheduler,self.importScheduleCheckBox,lambda i: i==0))
+
+		self.downloadMediaCheckBox = QCheckBox("Download media files")
+		layout.addWidget(self.downloadMediaCheckBox)
+		
+		self.skipExistingMediaCheckBox = QCheckBox("Skip download of existing media files")
+		layout.addWidget(self.skipExistingMediaCheckBox)
+		
+		self.downloadMediaCheckBox.stateChanged.connect(self.skipExistingMediaCheckBox.setEnabled)
+		self.downloadMediaCheckBox.setChecked(True)
+		self.skipExistingMediaCheckBox.setChecked(True)
 
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
 		
