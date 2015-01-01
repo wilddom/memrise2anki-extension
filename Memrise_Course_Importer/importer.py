@@ -41,8 +41,11 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
-# 			if thing.isIgnored and self.sender.skipIgnoredWords:
-# 				return
+			if self.sender.skipIgnoredWords:
+				scheduleInfo = thing.pool.schedule.get(thing.level.direction, thing)
+				if scheduleInfo and scheduleInfo.ignored:
+					return
+
 			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for colName in thing.pool.getImageColumnNames():
 				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
