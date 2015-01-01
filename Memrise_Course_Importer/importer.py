@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 
-import memrise, cookielib, os.path, uuid, sys
+import memrise, cookielib, os.path, uuid, sys, datetime
 from anki.media import MediaManager
 from aqt import mw
 from aqt.qt import *
@@ -671,8 +671,13 @@ class MemriseImportDialog(QDialog):
 
 				if self.importIntervalsCheckBox.isChecked() and scheduleInfo and scheduleInfo.interval is not None:
 					for card in ankiNote.cards():
-						card.ivl = scheduleInfo.interval
+						card.type = 2
 						card.queue = 2
+						card.ivl = int(round(scheduleInfo.interval))
+						card.reps = scheduleInfo.total
+						card.lapses = scheduleInfo.incorrect
+						card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
+						card.factor = 2500
 						card.flush()
 
 				if scheduleInfo and scheduleInfo.ignored and self.ignoredWordsAction.currentText() == 'Suspend':

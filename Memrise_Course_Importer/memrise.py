@@ -1,6 +1,13 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, itertools, operator
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, itertools, datetime, calendar
 import uuid
 import BeautifulSoup
+
+def utcToLocal(utcDt):
+    # get integer timestamp to avoid precision lost
+    timestamp = calendar.timegm(utcDt.timetuple())
+    localDt = datetime.datetime.fromtimestamp(timestamp)
+    assert utcDt.resolution >= datetime.timedelta(microseconds=1)
+    return localDt.replace(microsecond=utcDt.microsecond)
 
 class Course(object):
     def __init__(self, courseId):
@@ -45,6 +52,11 @@ class ScheduleInfo(object):
         self.thingId = None
         self.interval = None
         self.ignored = False
+        self.total = 0
+        self.correct = 0
+        self.incorrect = 0
+        self.streak = 0
+        self.due = datetime.date.today()
 
 class Level(object):
     def __init__(self, levelId):
@@ -416,6 +428,11 @@ class CourseLoader(object):
             scheduleInfo.thingId = userData['thing_id']
             scheduleInfo.ignored = userData['ignored']
             scheduleInfo.interval = userData['interval']
+            scheduleInfo.correct = userData['total_correct']
+            scheduleInfo.incorrect = userData['total_incorrect']
+            scheduleInfo.total = userData['total_correct']+userData['total_incorrect']
+            scheduleInfo.streak = userData['current_streak']
+            scheduleInfo.due = utcToLocal(datetime.datetime.strptime(userData['next_date'], "%Y-%m-%dT%H:%M:%S"))
             level.pool.schedule.add(level.direction, scheduleInfo)
 
         thingLoader = ThingLoader(level.pool)
