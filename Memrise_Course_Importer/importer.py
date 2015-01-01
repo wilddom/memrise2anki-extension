@@ -41,11 +41,6 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
-			if self.sender.skipIgnoredWords:
-				scheduleInfo = thing.pool.schedule.get(thing.level.direction, thing)
-				if scheduleInfo and scheduleInfo.ignored:
-					return
-
 			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for colName in thing.pool.getImageColumnNames():
 				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
@@ -85,7 +80,6 @@ class MemriseCourseLoader(QObject):
 		self.exc_info = (None,None,None)
 		self.downloadMedia = True
 		self.skipExistingMedia = True
-		self.skipIgnoredWords = False
 	
 	def load(self, url):
 		self.url = url
@@ -453,17 +447,10 @@ class MemriseImportDialog(QDialog):
 		self.minimalLevelTagWidthSpinBox.setMaximum(9)
 		self.minimalLevelTagWidthSpinBox.setValue(2)
 		layout.addWidget(self.minimalLevelTagWidthSpinBox)
-		
-		self.ignoredWordsAction = QComboBox()
-		self.ignoredWordsAction.addItem("Suspend")
-		self.ignoredWordsAction.addItem("Skip")
-		self.ignoredWordsAction.addItem("Add")
-		layout.addWidget(QLabel("Ignored words:"))
-		layout.addWidget(self.ignoredWordsAction)
 
-		self.importIntervalsCheckBox = QCheckBox("Import intervals")
-		self.importIntervalsCheckBox.setChecked(True)
-		layout.addWidget(self.importIntervalsCheckBox)
+		self.importScheduleCheckBox = QCheckBox("Import scheduler information")
+		self.importScheduleCheckBox.setChecked(True)
+		layout.addWidget(self.importScheduleCheckBox)
 
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
@@ -487,7 +474,11 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(label)
 		layout.addWidget(self.deckSelection)
 		self.deckSelection.currentIndexChanged.connect(self.loadDeckUrl)
-		
+
+		def setScheduler(checkbox, predicate, index):
+			checkbox.setChecked(predicate(index))
+		self.deckSelection.currentIndexChanged.connect(partial(setScheduler,self.importScheduleCheckBox,lambda i: i==0))
+
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
 		
 		self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
@@ -630,10 +621,6 @@ class MemriseImportDialog(QDialog):
 		for level in course:
 			tags = self.getLevelTags(len(course), level)
 			for thing in level:
-				scheduleInfo = thing.pool.schedule.get(level.direction, thing)
-				if scheduleInfo and scheduleInfo.ignored and self.ignoredWordsAction.currentText() == 'Skip':
-					continue
-
 				if thing.id in noteCache:
 					ankiNote = noteCache[thing.id]
 				else:
@@ -672,19 +659,22 @@ class MemriseImportDialog(QDialog):
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
 
-				if self.importIntervalsCheckBox.isChecked() and scheduleInfo and scheduleInfo.interval is not None:
-					for card in ankiNote.cards():
-						card.type = 2
-						card.queue = 2
-						card.ivl = int(round(scheduleInfo.interval))
-						card.reps = scheduleInfo.total
-						card.lapses = scheduleInfo.incorrect
-						card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
-						card.factor = 2500
-						card.flush()
+				if self.importScheduleCheckBox.isChecked():
+					scheduleInfo = thing.pool.schedule.get(level.direction, thing)
+					if scheduleInfo:
+						if scheduleInfo.interval is not None:
+							for card in ankiNote.cards():
+								card.type = 2
+								card.queue = 2
+								card.ivl = int(round(scheduleInfo.interval))
+								card.reps = scheduleInfo.total
+								card.lapses = scheduleInfo.incorrect
+								card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
+								card.factor = 2500
+								card.flush()
 
-				if scheduleInfo and scheduleInfo.ignored and self.ignoredWordsAction.currentText() == 'Suspend':
-					mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
+						if scheduleInfo.ignored:
+							mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
 
 				self.progressBar.setValue(self.progressBar.value()+1)
 				QApplication.processEvents()
@@ -705,7 +695,6 @@ class MemriseImportDialog(QDialog):
 		courseUrl = self.courseUrlLineEdit.text()
 		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
 		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
-		self.loader.skipIgnoredWords = self.ignoredWordsAction.currentText() == 'Skip'
 		self.loader.start(courseUrl)
 
 def startCourseImporter():
