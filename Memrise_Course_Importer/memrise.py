@@ -10,6 +10,7 @@ class Course(object):
         self.source = ""
         self.target = ""
         self.levels = []
+        self.pools = {}
 
     def __iter__(self):
         for level in self.levels:
@@ -17,6 +18,33 @@ class Course(object):
                 
     def __len__(self):
         return len(self.levels)
+
+class Direction(object):
+    def __init__(self, front=None, back=None):
+        self.front = front
+        self.back = back
+        
+    def __hash__(self):
+        return hash((self.front, self.back))
+    
+    def __eq__(self, other):
+        return (self.front, self.back) == (other.front, other.back)
+
+class Schedule(object):
+    def __init__(self):
+        self.data = {}
+        
+    def add(self, direction, info):
+        self.data.setdefault(direction, {})[info.thingId] = info
+        
+    def get(self, direction, thing):
+        return self.data.get(direction, {}).get(thing.id)
+
+class ScheduleInfo(object):
+    def __init__(self):
+        self.thingId = None
+        self.interval = None
+        self.ignored = False
 
 class Level(object):
     def __init__(self, levelId):
@@ -26,6 +54,7 @@ class Level(object):
         self.things = []
         self.course = None
         self.pool = None
+        self.direction = None
         
     def __iter__(self):
         for thing in self.things:
@@ -58,6 +87,8 @@ class Pool(object):
 
         self.columnNamesIndex = {}
         self.uniquifyName = NameUniquifier()
+        
+        self.schedule = Schedule()
 
     def addColumn(self, colType, name, index):
         key = self.uniquifyName(name)
@@ -146,9 +177,6 @@ class Thing(object):
         
         self.localAudioUrls = collections.OrderedDict()
         self.localImageUrls = collections.OrderedDict()
-
-        self.isIgnored = False
-        self.ivl = None
     
     def getAudioUrls(self, nameOrIndex):
         name = self.pool.getAudioColumnName(nameOrIndex)
@@ -244,8 +272,8 @@ class ThingLoader(object):
             
         return thing
     
-    def loadThing(self, thingId, row, userData=None, fixUrl=lambda url: url):
-        thing = self.createThing(thingId)
+    def loadThing(self, row, fixUrl=lambda url: url):
+        thing = self.createThing(row['id'])
         
         for colName, colIndex in self.pool.textColumns.items():
             cell = row['columns'][colIndex]
@@ -265,10 +293,6 @@ class ThingLoader(object):
         for attrName, attrIndex in self.pool.attributes.items():
             cell = row['attributes'][attrIndex]
             thing.attributes[attrName] = self.__getAttribute(cell)
-
-        if userData:
-            thing.isIgnored = userData['ignored']
-            thing.ivl = int(userData['interval'])
 
         return thing
 
@@ -322,7 +346,6 @@ class CourseLoader(object):
         self.observers = []
         self.levelCount = 0
         self.thingCount = 0
-        self.pools = {}
     
     def registerObserver(self, observer):
         self.observers.append(observer)
@@ -380,16 +403,24 @@ class CourseLoader(object):
         level.course = course
 
         poolId = levelData["session"]["level"]["pool_id"]
-        if not poolId in self.pools:
-            self.pools[poolId] = self.loadPool(levelData["pools"][unicode(poolId)])
-        level.pool = self.pools[poolId]
+        if not poolId in course.pools:
+            course.pools[poolId] = self.loadPool(levelData["pools"][unicode(poolId)])
+        level.pool = course.pools[poolId]
 
-        thingUsers = { str(userData['thing_id']): userData for userData in levelData["thingusers"] }
+        level.direction = Direction()
+        level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
+        level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
+
+        for userData in levelData["thingusers"]:
+            scheduleInfo = ScheduleInfo()
+            scheduleInfo.thingId = userData['thing_id']
+            scheduleInfo.ignored = userData['ignored']
+            scheduleInfo.interval = userData['interval']
+            level.pool.schedule.add(level.direction, scheduleInfo)
 
         thingLoader = ThingLoader(level.pool)
-        for thingId, thingRowData in levelData["things"].items():
-            thingUserData = thingUsers.get(thingId)
-            thing = thingLoader.loadThing(thingId, thingRowData, thingUserData, self.service.toAbsoluteMediaUrl)
+        for _, thingRowData in levelData["things"].items():
+            thing = thingLoader.loadThing(thingRowData, self.service.toAbsoluteMediaUrl)
             thing.level = level
             level.things.append(thing)
             self.notify('thingLoaded', thing)

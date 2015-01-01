@@ -41,8 +41,8 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
-			if thing.isIgnored and self.sender.skipIgnoredWords:
-				return
+# 			if thing.isIgnored and self.sender.skipIgnoredWords:
+# 				return
 			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for colName in thing.pool.getImageColumnNames():
 				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
@@ -627,7 +627,8 @@ class MemriseImportDialog(QDialog):
 		for level in course:
 			tags = self.getLevelTags(len(course), level)
 			for thing in level:
-				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Skip':
+				scheduleInfo = thing.pool.schedule.get(level.direction, thing)
+				if scheduleInfo and scheduleInfo.ignored and self.ignoredWordsAction.currentText() == 'Skip':
 					continue
 
 				if thing.id in noteCache:
@@ -658,7 +659,7 @@ class MemriseImportDialog(QDialog):
 					ankiNote[_('Level')] = u', '.join(levels)
 				
 				if _('Thing') in ankiNote.keys():
-					ankiNote[_('Thing')] = thing.id
+					ankiNote[_('Thing')] = unicode(thing.id)
 				
 				for tag in tags:
 					ankiNote.addTag(tag)
@@ -668,13 +669,13 @@ class MemriseImportDialog(QDialog):
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
 
-				if self.importIntervalsCheckBox.isChecked() and thing.ivl is not None:
+				if self.importIntervalsCheckBox.isChecked() and scheduleInfo and scheduleInfo.interval is not None:
 					for card in ankiNote.cards():
-						card.ivl = thing.ivl
+						card.ivl = scheduleInfo.interval
 						card.queue = 2
 						card.flush()
 
-				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Suspend':
+				if scheduleInfo and scheduleInfo.ignored and self.ignoredWordsAction.currentText() == 'Suspend':
 					mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
 
 				self.progressBar.setValue(self.progressBar.value()+1)
