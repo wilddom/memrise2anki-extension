@@ -39,16 +39,21 @@ class Direction(object):
 
 class Schedule(object):
     def __init__(self):
-        self.data = {}
+        self.directionThing = {}
+        self.thingDirection = {}
         
     def add(self, info):
-        self.data.setdefault(info.direction, {})[info.thingId] = info
+        self.directionThing.setdefault(info.direction, {})[info.thingId] = info
+        self.thingDirection.setdefault(info.thingId, {})[info.direction] = info
         
     def get(self, direction, thing):
-        return self.data.get(direction, {}).get(thing.id)
+        return self.directionThing.get(direction, {}).get(thing.id)
+    
+    def getScheduleInfosForThing(self, thing):
+        return self.thingDirection.get(thing.id, {})
     
     def getDirections(self):
-        return self.data.keys()
+        return self.directionThing.keys()
 
 class ScheduleInfo(object):
     def __init__(self):
