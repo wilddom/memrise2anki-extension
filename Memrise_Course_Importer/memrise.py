@@ -433,8 +433,8 @@ class CourseLoader(object):
         level.pool = course.pools[poolId]
 
         level.direction = Direction()
-        level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
-        level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
+        level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
+        level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
 
         for userData in levelData["thingusers"]:
             level.pool.schedule.add(level.direction, self.loadScheduleInfo(userData))
