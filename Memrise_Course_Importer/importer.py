@@ -253,26 +253,12 @@ class ModelMappingDialog(QDialog):
 		fm = mm.newField(_("Thing"))
 		mm.addField(m, fm)
 		
-		front = pool.getTextColumnName(0)
-		if pool.hasTextColumnName(camelize(course.source)):
-			front = camelize(course.source)
-		elif pool.hasTextColumnName(course.source):
-			front = course.source
-		
-		back = pool.getTextColumnName(1)
-		if pool.hasTextColumnName(camelize(course.target)):
-			back = camelize(course.target)
-		elif pool.hasTextColumnName(course.target):
-			back = course.target
-		
 		m['css'] += "\n.alts {\n font-size: 14px;\n}"
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
 		
-		t = self.__createTemplate(mm, pool, front, back)
-		mm.addTemplate(m, t)
-		
-		t = self.__createTemplate(mm, pool, back, front)
-		mm.addTemplate(m, t)
+		for direction in pool.schedule.getDirections():
+			t = self.__createTemplate(mm, pool, direction.front, direction.back)
+			mm.addTemplate(m, t)
 		
 		return m
 	

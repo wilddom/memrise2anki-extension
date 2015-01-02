@@ -46,6 +46,9 @@ class Schedule(object):
         
     def get(self, direction, thing):
         return self.data.get(direction, {}).get(thing.id)
+    
+    def getDirections(self):
+        return self.data.keys()
 
 class ScheduleInfo(object):
     def __init__(self):
