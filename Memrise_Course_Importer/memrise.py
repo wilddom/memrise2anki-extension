@@ -100,6 +100,7 @@ class Pool(object):
     def __init__(self, poolId=None):
         self.id = poolId
         self.name = ''
+        self.course = None
 
         self.textColumns = collections.OrderedDict()
         self.audioColumns = collections.OrderedDict()
@@ -188,7 +189,6 @@ class Pool(object):
 class Thing(object):
     def __init__(self, thingId):
         self.id = thingId
-        self.level = None
         self.pool = None
         
         self.textData = collections.OrderedDict()
@@ -440,7 +440,9 @@ class CourseLoader(object):
 
         poolId = levelData["session"]["level"]["pool_id"]
         if not poolId in course.pools:
-            course.pools[poolId] = self.loadPool(levelData["pools"][unicode(poolId)])
+            pool = self.loadPool(levelData["pools"][unicode(poolId)])
+            pool.course = course
+            course.pools[poolId] = pool
         level.pool = course.pools[poolId]
 
         level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
@@ -452,7 +454,6 @@ class CourseLoader(object):
         thingLoader = ThingLoader(level.pool)
         for _, thingRowData in levelData["things"].items():
             thing = thingLoader.loadThing(thingRowData, self.service.toAbsoluteMediaUrl)
-            thing.level = level
             level.things.append(thing)
             self.notify('thingLoaded', thing)
         

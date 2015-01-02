@@ -267,7 +267,7 @@ class ModelMappingDialog(QDialog):
 		return m
 	
 	def __loadModel(self, thing, deck=None):
-		model = self.__createMemriseModel(thing.level.course, thing.pool)
+		model = self.__createMemriseModel(thing.pool.course, thing.pool)
 		
 		modelStored = self.col.models.byName(model['name'])
 		if modelStored:
