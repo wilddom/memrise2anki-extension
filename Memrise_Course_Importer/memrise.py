@@ -403,6 +403,19 @@ class CourseLoader(object):
         
         return pool
     
+    @staticmethod
+    def loadScheduleInfo(data):
+        scheduleInfo = ScheduleInfo()
+        scheduleInfo.thingId = data['thing_id']
+        scheduleInfo.ignored = data['ignored']
+        scheduleInfo.interval = data['interval']
+        scheduleInfo.correct = data['total_correct']
+        scheduleInfo.incorrect = data['total_incorrect']
+        scheduleInfo.total = data['total_correct']+data['total_incorrect']
+        scheduleInfo.streak = data['current_streak']
+        scheduleInfo.due = utcToLocal(datetime.datetime.strptime(data['next_date'], "%Y-%m-%dT%H:%M:%S"))
+        return scheduleInfo
+    
     def loadLevel(self, course, levelIndex):
         levelData = self.service.loadLevelData(course.id, levelIndex)
         
@@ -424,16 +437,7 @@ class CourseLoader(object):
         level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
 
         for userData in levelData["thingusers"]:
-            scheduleInfo = ScheduleInfo()
-            scheduleInfo.thingId = userData['thing_id']
-            scheduleInfo.ignored = userData['ignored']
-            scheduleInfo.interval = userData['interval']
-            scheduleInfo.correct = userData['total_correct']
-            scheduleInfo.incorrect = userData['total_incorrect']
-            scheduleInfo.total = userData['total_correct']+userData['total_incorrect']
-            scheduleInfo.streak = userData['current_streak']
-            scheduleInfo.due = utcToLocal(datetime.datetime.strptime(userData['next_date'], "%Y-%m-%dT%H:%M:%S"))
-            level.pool.schedule.add(level.direction, scheduleInfo)
+            level.pool.schedule.add(level.direction, self.loadScheduleInfo(userData))
 
         thingLoader = ThingLoader(level.pool)
         for _, thingRowData in levelData["things"].items():
