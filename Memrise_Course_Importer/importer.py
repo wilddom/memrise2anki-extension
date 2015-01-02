@@ -209,11 +209,11 @@ class ModelMappingDialog(QDialog):
 			t['afmt'] += u"{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
 		
 		if front == pool.getTextColumnName(0):
-			imageside = 'qfmt'
-			audioside = 'afmt'
-		else:
 			imageside = 'afmt'
 			audioside = 'qfmt'
+		else:
+			imageside = 'qfmt'
+			audioside = 'afmt'
 			
 		for colName in filter(notFrontBack, pool.getImageColumnNames()):
 			t[imageside] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
