@@ -41,8 +41,8 @@ class Schedule(object):
     def __init__(self):
         self.data = {}
         
-    def add(self, direction, info):
-        self.data.setdefault(direction, {})[info.thingId] = info
+    def add(self, info):
+        self.data.setdefault(info.direction, {})[info.thingId] = info
         
     def get(self, direction, thing):
         return self.data.get(direction, {}).get(thing.id)
@@ -50,6 +50,7 @@ class Schedule(object):
 class ScheduleInfo(object):
     def __init__(self):
         self.thingId = None
+        self.direction = Direction()
         self.interval = None
         self.ignored = False
         self.total = 0
@@ -66,7 +67,7 @@ class Level(object):
         self.things = []
         self.course = None
         self.pool = None
-        self.direction = None
+        self.direction = Direction()
         
     def __iter__(self):
         for thing in self.things:
@@ -404,9 +405,11 @@ class CourseLoader(object):
         return pool
     
     @staticmethod
-    def loadScheduleInfo(data):
+    def loadScheduleInfo(data, pool):
         scheduleInfo = ScheduleInfo()
         scheduleInfo.thingId = data['thing_id']
+        scheduleInfo.direction.front = pool.getColumnName(data["column_b"])
+        scheduleInfo.direction.back = pool.getColumnName(data["column_a"])
         scheduleInfo.ignored = data['ignored']
         scheduleInfo.interval = data['interval']
         scheduleInfo.correct = data['total_correct']
@@ -432,12 +435,11 @@ class CourseLoader(object):
             course.pools[poolId] = self.loadPool(levelData["pools"][unicode(poolId)])
         level.pool = course.pools[poolId]
 
-        level.direction = Direction()
         level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
         level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
 
         for userData in levelData["thingusers"]:
-            level.pool.schedule.add(level.direction, self.loadScheduleInfo(userData))
+            level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
 
         thingLoader = ThingLoader(level.pool)
         for _, thingRowData in levelData["things"].items():
