@@ -523,11 +523,11 @@ class MemriseImportDialog(QDialog):
 		return value
 	
 	def prepareLevelTag(self, levelNum, width):
-		formatstr = u"Level{:0"+str(width)+"d}"
+		formatstr = u"Level{:0"+unicode(width)+"d}"
 		return formatstr.format(levelNum)
 	
 	def getLevelTags(self, levelCount, level):
-		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(str(levelCount))))]
+		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(unicode(levelCount))))]
 		titleTag = self.prepareTitleTag(level.title)
 		if titleTag:
 			tags.append(titleTag)
@@ -653,7 +653,7 @@ class MemriseImportDialog(QDialog):
 
 				if _('Level') in ankiNote.keys():
 					levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
-					levels.add(str(level.index))
+					levels.add(unicode(level.index))
 					ankiNote[_('Level')] = u', '.join(levels)
 				
 				if _('Thing') in ankiNote.keys():
