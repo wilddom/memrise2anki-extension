@@ -180,6 +180,45 @@ class ModelMappingDialog(QDialog):
 		for name in sorted(self.col.models.allNames()):
 			self.modelSelection.addItem(name)
 	
+	@staticmethod
+	def __filterFields(fieldname, filtered=[]):
+		return fieldname in filtered
+	
+	@staticmethod
+	def __createTemplate(mm, pool, front, back):
+		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
+		frontAlternatives = u"{} {}".format(front, _("Alternatives"))
+		backAlternatives = u"{} {}".format(back, _("Alternatives"))
+		
+		t = mm.newTemplate(u"{} -> {}".format(front, back))
+		
+		t['qfmt'] = u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
+		
+		for colName in filter(notFrontBack, pool.getTextColumnNames()):
+			t['qfmt'] += u"{{"+colName+u"}}\n"
+			altColName = u"{} {}".format(colName, _("Alternatives"))
+			t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
+		
+		for attrName in filter(notFrontBack, pool.getAttributeNames()):
+			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
+		
+		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
+		
+		if front == pool.getTextColumnName(0):
+			imageside = 'qfmt'
+			audioside = 'afmt'
+		else:
+			imageside = 'afmt'
+			audioside = 'qfmt'
+			
+		for colName in filter(notFrontBack, pool.getImageColumnNames()):
+			t[imageside] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
+		
+		for colName in filter(notFrontBack, pool.getAudioColumnNames()):
+			t[audioside] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
+		
+		return t
+	
 	def __createMemriseModel(self, course, pool):
 		mm = self.col.models
 				
@@ -219,48 +258,20 @@ class ModelMappingDialog(QDialog):
 			front = camelize(course.source)
 		elif pool.hasTextColumnName(course.source):
 			front = course.source
-		frontAlternatives = u"{} {}".format(front, _("Alternatives"))
 		
 		back = pool.getTextColumnName(1)
 		if pool.hasTextColumnName(camelize(course.target)):
 			back = camelize(course.target)
 		elif pool.hasTextColumnName(course.target):
 			back = course.target
-		backAlternatives = u"{} {}".format(back, _("Alternatives"))
 		
 		m['css'] += "\n.alts {\n font-size: 14px;\n}"
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
 		
-		t = mm.newTemplate(u"{} -> {}".format(camelize(course.source), camelize(course.target)))
-		t['qfmt'] = u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
-		for colName in pool.getTextColumnNames():
-			if not colName in [front, back]:
-				t['qfmt'] += u"{{"+colName+u"}}\n"
-				altColName = u"{} {}".format(colName, _("Alternatives"))
-				t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
-		for attrName in pool.getAttributeNames():
-			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
-		for colName in pool.getImageColumnNames():
-			t['qfmt'] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
-		for colName in pool.getAudioColumnNames():
-			t['afmt'] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
+		t = self.__createTemplate(mm, pool, front, back)
 		mm.addTemplate(m, t)
 		
-		t = mm.newTemplate(u"{} -> {}".format(camelize(course.target), camelize(course.source)))
-		t['qfmt'] = u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
-		for colName in pool.getTextColumnNames():
-			if not colName in [front, back]:
-				t['qfmt'] += u"{{"+colName+u"}}\n"
-				altColName = u"{} {}".format(colName, _("Alternatives"))
-				t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
-		for attrName in pool.getAttributeNames():
-			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
-		for colName in pool.getAudioColumnNames():
-			t['qfmt'] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
-		for colName in pool.getImageColumnNames():
-			t['afmt'] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
+		t = self.__createTemplate(mm, pool, back, front)
 		mm.addTemplate(m, t)
 		
 		return m
