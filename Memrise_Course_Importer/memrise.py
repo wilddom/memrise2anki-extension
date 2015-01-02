@@ -37,6 +37,9 @@ class Direction(object):
     def __eq__(self, other):
         return (self.front, self.back) == (other.front, other.back)
 
+    def __unicode__(self):
+        return u"{} -> {}".format(self.front, self.back)
+
 class Schedule(object):
     def __init__(self):
         self.directionThing = {}

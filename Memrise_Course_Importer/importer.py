@@ -185,10 +185,8 @@ class ModelMappingDialog(QDialog):
 		return fieldname in filtered
 	
 	@staticmethod
-	def __createTemplate(mm, pool, front, back):
+	def __createTemplate(t, pool, front, back):
 		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
-		
-		t = mm.newTemplate(u"{} -> {}".format(front, back))
 		
 		t['qfmt'] = u"{{"+front+u"}}\n"
 		if front in pool.getTextColumnNames():
@@ -261,7 +259,8 @@ class ModelMappingDialog(QDialog):
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
 		
 		for direction in pool.schedule.getDirections():
-			t = self.__createTemplate(mm, pool, direction.front, direction.back)
+			t = mm.newTemplate(unicode(direction))
+			self.__createTemplate(t, pool, direction.front, direction.back)
 			mm.addTemplate(m, t)
 		
 		return m
