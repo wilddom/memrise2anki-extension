@@ -41,6 +41,8 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
+			if thing.isIgnored and self.sender.skipIgnoredWords:
+				return
 			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for colName in thing.pool.getImageColumnNames():
 				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
@@ -80,6 +82,7 @@ class MemriseCourseLoader(QObject):
 		self.exc_info = (None,None,None)
 		self.downloadMedia = True
 		self.skipExistingMedia = True
+		self.skipIgnoredWords = False
 	
 	def load(self, url):
 		self.url = url
@@ -448,6 +451,17 @@ class MemriseImportDialog(QDialog):
 		self.minimalLevelTagWidthSpinBox.setValue(2)
 		layout.addWidget(self.minimalLevelTagWidthSpinBox)
 		
+		self.ignoredWordsAction = QComboBox()
+		self.ignoredWordsAction.addItem("Suspend")
+		self.ignoredWordsAction.addItem("Skip")
+		self.ignoredWordsAction.addItem("Add")
+		layout.addWidget(QLabel("Ignored words:"))
+		layout.addWidget(self.ignoredWordsAction)
+
+		self.importIntervalsCheckBox = QCheckBox("Import intervals")
+		self.importIntervalsCheckBox.setChecked(True)
+		layout.addWidget(self.importIntervalsCheckBox)
+
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
 		
@@ -613,6 +627,9 @@ class MemriseImportDialog(QDialog):
 		for level in course:
 			tags = self.getLevelTags(len(course), level)
 			for thing in level:
+				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Skip':
+					continue
+
 				if thing.id in noteCache:
 					ankiNote = noteCache[thing.id]
 				else:
@@ -650,7 +667,16 @@ class MemriseImportDialog(QDialog):
 					mw.col.addNote(ankiNote)
 				ankiNote.flush()
 				noteCache[thing.id] = ankiNote
-				
+
+				if self.importIntervalsCheckBox.isChecked() and thing.ivl is not None:
+					for card in ankiNote.cards():
+						card.ivl = thing.ivl
+						card.queue = 2
+						card.flush()
+
+				if thing.isIgnored and self.ignoredWordsAction.currentText() == 'Suspend':
+					mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
+
 				self.progressBar.setValue(self.progressBar.value()+1)
 				QApplication.processEvents()
 		
@@ -670,6 +696,7 @@ class MemriseImportDialog(QDialog):
 		courseUrl = self.courseUrlLineEdit.text()
 		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
 		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
+		self.loader.skipIgnoredWords = self.ignoredWordsAction.currentText() == 'Skip'
 		self.loader.start(courseUrl)
 
 def startCourseImporter():
