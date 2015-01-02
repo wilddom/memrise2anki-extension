@@ -187,12 +187,13 @@ class ModelMappingDialog(QDialog):
 	@staticmethod
 	def __createTemplate(mm, pool, front, back):
 		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
-		frontAlternatives = u"{} {}".format(front, _("Alternatives"))
-		backAlternatives = u"{} {}".format(back, _("Alternatives"))
 		
 		t = mm.newTemplate(u"{} -> {}".format(front, back))
 		
-		t['qfmt'] = u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
+		t['qfmt'] = u"{{"+front+u"}}\n"
+		if front in pool.getTextColumnNames():
+			frontAlternatives = u"{} {}".format(front, _("Alternatives"))
+			t['qfmt'] += u"{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
 		
 		for colName in filter(notFrontBack, pool.getTextColumnNames()):
 			t['qfmt'] += u"{{"+colName+u"}}\n"
@@ -202,7 +203,10 @@ class ModelMappingDialog(QDialog):
 		for attrName in filter(notFrontBack, pool.getAttributeNames()):
 			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
 		
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
+		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n"
+		if back in pool.getTextColumnNames():
+			backAlternatives = u"{} {}".format(back, _("Alternatives"))
+			t['afmt'] += u"{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
 		
 		if front == pool.getTextColumnName(0):
 			imageside = 'qfmt'
