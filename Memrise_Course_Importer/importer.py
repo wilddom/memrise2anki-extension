@@ -578,18 +578,12 @@ class MemriseImportDialog(QDialog):
 		notes = mw.col.findNotes(u'deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
 		if notes:
 			return mw.col.getNote(notes[0])
-		
-		fields = [(camelize(course.source), camelize(course.target)), (thing.pool.getTextColumnName(0), thing.pool.getTextColumnName(1)), (_('Front'), _('Back')), ('Front', 'Back')]
-		for pair in fields:
-			notes = mw.col.findNotes(u'deck:"{}" "{}:{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.getDefinitions(0,1)), pair[1], u"<br/>".join(thing.getDefinitions(1, None))))
-			if notes:
-				return mw.col.getNote(notes[0])
 			
 		return None
 
 	def getWithSpec(self, thing, spec):
 		if spec['type'] == 'text' and spec['sub'] == 'value':
-			return self.prepareText(thing.getDefinition(spec['name']))
+			return map(self.prepareText, thing.getDefinitions(spec['name']))
 		elif spec['type'] == 'text' and spec['sub'] == 'alternatives':
 			return map(self.prepareText, thing.getAlternatives(spec['name']))
 		elif spec['type'] == 'text' and spec['sub'] == 'hidden_alternatives':
@@ -601,7 +595,7 @@ class MemriseImportDialog(QDialog):
 		elif spec['type'] == 'audio':
 			return map(self.prepareAudio, thing.getLocalAudioUrls(spec['name']))
 		elif spec['type'] == 'attribute':
-			return self.prepareText(thing.getAttribute(spec['name']))
+			return map(self.prepareText, thing.getAttributes(spec['name']))
 		return None
 	
 	def importCourse(self):
