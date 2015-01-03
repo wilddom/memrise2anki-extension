@@ -99,53 +99,93 @@ class NameUniquifier(object):
         self.names[key] += 1
         return u"{} {}".format(key, self.names[key])
 
+class Column(object):
+    def __init__(self, colType, name, index):
+        self.type = colType
+        self.name = name
+        self.index = index
+
+class Attribute(object):
+    def __init__(self, attrType, name, index):
+        self.type = attrType
+        self.name = name
+        self.index = index
+
 class Pool(object):
     def __init__(self, poolId=None):
         self.id = poolId
         self.name = ''
         self.course = None
-
-        self.textColumns = collections.OrderedDict()
-        self.audioColumns = collections.OrderedDict()
-        self.imageColumns = collections.OrderedDict()
+        
+        self.columnTypes = ['text', 'audio', 'image']
+        self.attributeTypes = ['text']
+        
+        self.columns = collections.OrderedDict()
         self.attributes = collections.OrderedDict()
 
-        self.columnNamesIndex = {}
+        self.columnsByType = collections.OrderedDict()
+        for colType in self.columnTypes:
+            self.columnsByType[colType] = collections.OrderedDict()
+        self.columnsByIndex = collections.OrderedDict()
+        
         self.uniquifyName = NameUniquifier()
         
         self.schedule = Schedule()
 
     def addColumn(self, colType, name, index):
-        key = self.uniquifyName(name)
-        if colType == 'text':
-            self.textColumns[key] = index
-        elif colType == 'audio':
-            self.audioColumns[key] = index
-        elif colType == 'image':
-            self.imageColumns[key] = index
-        else:
+        if not colType in self.columnTypes:
             return
-        self.columnNamesIndex[unicode(index)] = key
+        
+        column = Column(colType, self.uniquifyName(name), int(index))
+        self.columns[column.name] = column
+        self.columnsByType[column.type][column.name] = column
+        self.columnsByIndex[column.index] = column
 
     def addAttribute(self, attrType, name, index):
-        key = self.uniquifyName(name)
-        if attrType == 'text':
-            self.attributes[key] = index
+        if not attrType in self.attributeTypes:
+            return
+        
+        attribute = Attribute(attrType, self.uniquifyName(name), int(index))
+        self.attributes[attribute.name] = attribute
 
     def getColumnName(self, index):
-        return self.columnNamesIndex.get(unicode(index))
+        column = self.columnsByIndex.get(int(index))
+        if column:
+            return column.name
+        return None
+    
+    def getColumnNames(self):
+        return self.columns.keys()
+    
+    def hasColumnName(self, name):
+        return name in self.columns
+
+    def countColumns(self):
+        return len(self.columns)
 
     def getTextColumnNames(self):
-        return self.textColumns.keys()
+        return self.columnsByType['text'].keys()
 
     def getImageColumnNames(self):
-        return self.imageColumns.keys()
+        return self.columnsByType['image'].keys()
     
     def getAudioColumnNames(self):
-        return self.audioColumns.keys()
-
+        return self.columnsByType['audio'].keys()
+    
     def getAttributeNames(self):
         return self.attributes.keys()
+    
+    def getTextColumns(self):
+        return self.columnsByType['text'].values()
+
+    def getImageColumns(self):
+        return self.columnsByType['image'].values()
+    
+    def getAudioColumns(self):
+        return self.columnsByType['audio'].values()
+    
+    def getAttributes(self):
+        return self.attributes.values()
 
     @staticmethod
     def __getKeyFromIndex(keys, index):
@@ -153,14 +193,14 @@ class Pool(object):
             return index
         return keys[index]
     
-    def getTextColumnName(self, index):
-        return self.__getKeyFromIndex(self.getTextColumnNames(), index)
+    def getTextColumnName(self, nameOrIndex):
+        return self.__getKeyFromIndex(self.getTextColumnNames(), nameOrIndex)
 
-    def getImageColumnName(self, index):
-        return self.__getKeyFromIndex(self.getImageColumnNames(), index)
+    def getImageColumnName(self, nameOrIndex):
+        return self.__getKeyFromIndex(self.getImageColumnNames(), nameOrIndex)
     
-    def getAudioColumnName(self, index):
-        return self.__getKeyFromIndex(self.getAudioColumnNames(), index)
+    def getAudioColumnName(self, nameOrIndex):
+        return self.__getKeyFromIndex(self.getAudioColumnNames(), nameOrIndex)
 
     def getAttributeName(self, index):
         return self.__getKeyFromIndex(self.getAttributeNames(), index)
@@ -178,13 +218,13 @@ class Pool(object):
         return name in self.getAttributeNames()
 
     def countTextColumns(self):
-        return len(self.textColumns)
+        return len(self.columnsByType['text'])
     
     def countImageColumns(self):
-        return len(self.imageColumns)
+        return len(self.columnsByType['image'])
     
     def countAudioColumns(self):
-        return len(self.audioColumns)
+        return len(self.columnsByType['audio'])
     
     def countAttributes(self):
         return len(self.attributes)
@@ -299,24 +339,24 @@ class ThingLoader(object):
     def loadThing(self, row, fixUrl=lambda url: url):
         thing = self.createThing(row['id'])
         
-        for colName, colIndex in self.pool.textColumns.items():
-            cell = row['columns'][colIndex]
-            thing.textData[colName]["value"] = self.__getDefinition(cell)
-            thing.textData[colName]["alternatives"] = self.__getAlternatives(cell)
-            thing.textData[colName]["hidden_alternatives"] = self.__getHiddenAlternatives(cell)
-            thing.textData[colName]["typing_corrects"] = self.__getTypingCorrects(cell)
+        for column in self.pool.getTextColumns():
+            cell = row['columns'][unicode(column.index)]
+            thing.textData[column.name]["value"] = self.__getDefinition(cell)
+            thing.textData[column.name]["alternatives"] = self.__getAlternatives(cell)
+            thing.textData[column.name]["hidden_alternatives"] = self.__getHiddenAlternatives(cell)
+            thing.textData[column.name]["typing_corrects"] = self.__getTypingCorrects(cell)
         
-        for colName, colIndex in self.pool.audioColumns.items():
-            cell = row['columns'][colIndex]
-            thing.audioUrls[colName] = map(fixUrl, self.__getUrls(cell))
+        for column in self.pool.getAudioColumns():
+            cell = row['columns'][unicode(column.index)]
+            thing.audioUrls[column.name] = map(fixUrl, self.__getUrls(cell))
             
-        for colName, colIndex in self.pool.imageColumns.items():
-            cell = row['columns'][colIndex]
-            thing.imageUrls[colName] = map(fixUrl, self.__getUrls(cell))
+        for column in self.pool.getImageColumns():
+            cell = row['columns'][unicode(column.index)]
+            thing.imageUrls[column.name] = map(fixUrl, self.__getUrls(cell))
 
-        for attrName, attrIndex in self.pool.attributes.items():
-            cell = row['attributes'][attrIndex]
-            thing.attributes[attrName] = self.__getAttribute(cell)
+        for attribute in self.pool.getAttributes():
+            cell = row['attributes'][unicode(attribute.index)]
+            thing.attributes[attribute.name] = self.__getAttribute(cell)
 
         return thing
 
