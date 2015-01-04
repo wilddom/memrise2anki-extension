@@ -296,9 +296,88 @@ class ModelMappingDialog(QDialog):
 		
 		return self.models[thing.pool.id]
 
+class TemplateMappingDialog(QDialog):
+	def __init__(self, col):
+		super(TemplateMappingDialog, self).__init__()
+		self.col = col
+		self.templates = {}
+		
+		self.setWindowTitle("Assign Template Direction")
+		layout = QVBoxLayout(self)
+		
+		self.grid = QGridLayout()
+		layout.addLayout(self.grid)
+		
+		self.grid.addWidget(QLabel("Front:"), 0, 0)
+		self.frontName = QLabel()
+		self.grid.addWidget(self.frontName, 0, 1)
+		self.frontExample = QLabel()
+		self.grid.addWidget(self.frontExample, 0, 2)
+		
+		self.grid.addWidget(QLabel("Back:"), 1, 0)
+		self.backName = QLabel()
+		self.grid.addWidget(self.backName, 1, 1)
+		self.backExample = QLabel()
+		self.grid.addWidget(self.backExample, 1, 2)
+		
+		layout.addWidget(QLabel("Select template for direction:"))
+		self.templateSelection = QComboBox()
+		layout.addWidget(self.templateSelection)
+		self.templateSelection.setToolTip("Select the corresponding template for this direction.")
+		
+		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
+		buttons.accepted.connect(self.accept)
+		layout.addWidget(buttons)
+	
+	def __fillTemplateSelection(self, model):
+		self.templateSelection.clear()
+		for template in model['tmpls']:
+			self.templateSelection.addItem(template['name'], template)
+	
+	@staticmethod
+	def getFirst(values):
+		return values[0] if 0 < len(values) else u''
+	
+	def getTemplate(self, thing, note, direction):
+		model = note.model()
+		if direction in self.templates.get(model['id'], {}):
+			return self.templates[model['id']][direction]
+		
+		for template in model['tmpls']:
+			if template['name'] == unicode(direction):
+				self.templates.setdefault(model['id'], {})[direction] = template
+				return template
+
+		self.frontName.setText(direction.front)
+		frontField = FieldHelper(thing.pool.getColumn(direction.front))
+		self.frontExample.setText(self.getFirst(frontField.get(thing)))
+
+		self.backName.setText(direction.back)
+		backField = FieldHelper(thing.pool.getColumn(direction.back))
+		self.backExample.setText(self.getFirst(backField.get(thing)))
+
+		self.__fillTemplateSelection(model)
+		self.exec_()
+
+		template = self.templateSelection.itemData(self.templateSelection.currentIndex())
+		self.templates.setdefault(model['id'], {})[direction] = template
+		
+		return template
+
 class FieldHelper(object):
-	def __init__(self, field, getter, name=None):
+	def __init__(self, field, getter=None, name=None):
 		self.field = field
+		if getter is None:
+			if isinstance(field, memrise.Column):
+				if field.type == memrise.Field.Text:
+					getter = memrise.Thing.getDefinitions
+				elif field.type == memrise.Field.Audio:
+					getter = memrise.Thing.getLocalAudioUrls
+				elif field.type == memrise.Field.Image:
+					getter = memrise.Thing.getLocalImageUrls
+			elif isinstance(field, memrise.Attribute):
+				if field.type == memrise.Field.Text:
+					getter = memrise.Thing.getAttributes
 		self.getter = getter
 		self.name = name
 
@@ -515,6 +594,7 @@ class MemriseImportDialog(QDialog):
 		
 		self.modelMapper = ModelMappingDialog(mw.col)
 		self.fieldMapper = FieldMappingDialog(mw.col)
+		self.templateMapper = TemplateMappingDialog(mw.col)
 	
 	def prepareTitleTag(self, tag):
 		value = u''.join(x for x in tag.title() if x.isalnum())
@@ -592,6 +672,13 @@ class MemriseImportDialog(QDialog):
 			return map(self.prepareAudio, values)
 		return None
 	
+	@staticmethod
+	def toList(values):
+		if hasattr(values, '__iter__'):
+			return values
+		else:
+			return [values]
+	
 	def importCourse(self):
 		if self.loader.isException():
 			self.buttons.show()
@@ -629,13 +716,7 @@ class MemriseImportDialog(QDialog):
 				for field, data in mapping.iteritems():
 					values = []
 					for spec in data:
-						value = self.getWithSpec(thing, spec)
-						if hasattr(value, '__iter__'):
-							if len(value):
-								values.extend(value)
-						else:
-							if value:
-								values.append(value)
+						values.extend(self.toList(self.getWithSpec(thing, spec)))
 					ankiNote[field] = u", ".join(values)
 
 				if _('Level') in ankiNote.keys():
@@ -657,8 +738,11 @@ class MemriseImportDialog(QDialog):
 				if self.importScheduleCheckBox.isChecked():
 					scheduleInfo = thing.pool.schedule.get(level.direction, thing)
 					if scheduleInfo:
+						template = self.templateMapper.getTemplate(thing, ankiNote, scheduleInfo.direction)
+						cards = [card for card in ankiNote.cards() if card.ord == template['ord']]
+						
 						if scheduleInfo.interval is not None:
-							for card in ankiNote.cards():
+							for card in cards:
 								card.type = 2
 								card.queue = 2
 								card.ivl = int(round(scheduleInfo.interval))
@@ -669,7 +753,7 @@ class MemriseImportDialog(QDialog):
 								card.flush()
 
 						if scheduleInfo.ignored:
-							mw.col.sched.suspendCards([card.id for card in ankiNote.cards()])
+							mw.col.sched.suspendCards([card.id for card in cards])
 
 				self.progressBar.setValue(self.progressBar.value()+1)
 				QApplication.processEvents()
