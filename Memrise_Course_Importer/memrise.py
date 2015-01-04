@@ -99,25 +99,27 @@ class NameUniquifier(object):
         self.names[key] += 1
         return u"{} {}".format(key, self.names[key])
 
-class Column(object):
+class Field(object):
     Text = 'text'
     Audio = 'audio'
     Image = 'image'
-    Types = [Column.Text, Column.Audio, Column.Image]
     
-    def __init__(self, colType, name, index):
-        self.type = colType
+    def __init__(self, fieldType, name, index):
+        self.type = fieldType
         self.name = name
         self.index = index
 
-class Attribute(object):
-    Text = 'text'
-    Types = [Attribute.Text]
+class Column(Field):
+    Types = [Field.Text, Field.Audio, Field.Image]
+    
+    def __init__(self, colType, name, index):
+        super(Column, self).__init__(colType, name, index)
+
+class Attribute(Field):
+    Types = [Field.Text]
     
     def __init__(self, attrType, name, index):
-        self.type = attrType
-        self.name = name
-        self.index = index
+        super(Attribute, self).__init__(attrType, name, index)
 
 class Pool(object):
     def __init__(self, poolId=None):
@@ -152,42 +154,39 @@ class Pool(object):
         
         attribute = Attribute(attrType, self.uniquifyName(name), int(index))
         self.attributes[attribute.name] = attribute
-
-    def getColumnName(self, index):
-        column = self.columnsByIndex.get(int(index))
-        if column:
-            return column.name
-        return None
+    
+    def getColumn(self, name):
+        return self.columns.get(name)
+    
+    def getAttribute(self, name):
+        return self.columns.get(name)
     
     def getColumnNames(self):
         return self.columns.keys()
-    
-    def hasColumnName(self, name):
-        return name in self.columns
-
-    def countColumns(self):
-        return len(self.columns)
 
     def getTextColumnNames(self):
-        return self.columnsByType[Column.Text].keys()
+        return self.columnsByType[Field.Text].keys()
 
     def getImageColumnNames(self):
-        return self.columnsByType[Column.Image].keys()
+        return self.columnsByType[Field.Image].keys()
     
     def getAudioColumnNames(self):
-        return self.columnsByType[Column.Audio].keys()
+        return self.columnsByType[Field.Audio].keys()
     
     def getAttributeNames(self):
         return self.attributes.keys()
     
+    def getColumns(self):
+        return self.columns.values()
+    
     def getTextColumns(self):
-        return self.columnsByType[Column.Text].values()
+        return self.columnsByType[Field.Text].values()
 
     def getImageColumns(self):
-        return self.columnsByType[Column.Image].values()
+        return self.columnsByType[Field.Image].values()
     
     def getAudioColumns(self):
-        return self.columnsByType[Column.Audio].values()
+        return self.columnsByType[Field.Audio].values()
     
     def getAttributes(self):
         return self.attributes.values()
@@ -198,6 +197,12 @@ class Pool(object):
             return index
         return keys[index]
     
+    def getColumnName(self, memriseIndex):
+        column = self.columnsByIndex.get(int(memriseIndex))
+        if column:
+            return column.name
+        return None
+    
     def getTextColumnName(self, nameOrIndex):
         return self.__getKeyFromIndex(self.getTextColumnNames(), nameOrIndex)
 
@@ -207,9 +212,12 @@ class Pool(object):
     def getAudioColumnName(self, nameOrIndex):
         return self.__getKeyFromIndex(self.getAudioColumnNames(), nameOrIndex)
 
-    def getAttributeName(self, index):
-        return self.__getKeyFromIndex(self.getAttributeNames(), index)
+    def getAttributeName(self, nameOrIndex):
+        return self.__getKeyFromIndex(self.getAttributeNames(), nameOrIndex)
 
+    def hasColumnName(self, name):
+        return name in self.columns
+    
     def hasTextColumnName(self, name):
         return name in self.getTextColumnNames()
 
@@ -222,14 +230,17 @@ class Pool(object):
     def hasAttributeName(self, name):
         return name in self.getAttributeNames()
 
+    def countColumns(self):
+        return len(self.columns)
+    
     def countTextColumns(self):
-        return len(self.columnsByType[Column.Text])
+        return len(self.columnsByType[Field.Text])
     
     def countImageColumns(self):
-        return len(self.columnsByType[Column.Image])
+        return len(self.columnsByType[Field.Image])
     
     def countAudioColumns(self):
-        return len(self.columnsByType[Column.Audio])
+        return len(self.columnsByType[Field.Audio])
     
     def countAttributes(self):
         return len(self.attributes)
@@ -267,15 +278,15 @@ class Thing(object):
     
     def getTextColumnData(self, nameOrIndex):
         name = self.pool.getTextColumnName(nameOrIndex)
-        return self.columnDataByType[Column.Text][name]
+        return self.columnDataByType[Field.Text][name]
     
     def getAudioColumnData(self, nameOrIndex):
         name = self.pool.getAudioColumnName(nameOrIndex)
-        return self.columnDataByType[Column.Audio][name]
+        return self.columnDataByType[Field.Audio][name]
     
     def getImageColumnData(self, nameOrIndex):
         name = self.pool.getImageColumnName(nameOrIndex)
-        return self.columnDataByType[Column.Image][name]
+        return self.columnDataByType[Field.Image][name]
     
     def getAttributeData(self, nameOrIndex):
         name = self.pool.getAttributeName(nameOrIndex)
@@ -283,17 +294,17 @@ class Thing(object):
     
     def setTextColumnData(self, nameOrIndex, data):
         name = self.pool.getTextColumnName(nameOrIndex)
-        self.columnDataByType[Column.Text][name] = data
+        self.columnDataByType[Field.Text][name] = data
         self.columnData[name] = data
     
     def setAudioColumnData(self, nameOrIndex, data):
         name = self.pool.getTextColumnName(nameOrIndex)
-        self.columnDataByType[Column.Audio][name] = data
+        self.columnDataByType[Field.Audio][name] = data
         self.columnData[name] = data
         
     def setImageColumnData(self, nameOrIndex, data):
         name = self.pool.getTextColumnName(nameOrIndex)
-        self.columnDataByType[Column.Image][name] = data
+        self.columnDataByType[Field.Image][name] = data
         self.columnData[name] = data
     
     def setAttributeData(self, nameOrIndex, data):

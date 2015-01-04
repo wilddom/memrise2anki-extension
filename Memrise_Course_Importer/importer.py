@@ -181,10 +181,6 @@ class ModelMappingDialog(QDialog):
 			self.modelSelection.addItem(name)
 	
 	@staticmethod
-	def __filterFields(fieldname, filtered=[]):
-		return fieldname in filtered
-	
-	@staticmethod
 	def __createTemplate(t, pool, front, back):
 		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
 		
@@ -300,6 +296,20 @@ class ModelMappingDialog(QDialog):
 		
 		return self.models[thing.pool.id]
 
+class FieldHelper(object):
+	def __init__(self, field, getter, name=None):
+		self.field = field
+		self.getter = getter
+		self.name = name
+
+	def get(self, thing):
+		return self.getter(thing, self.field.name)
+
+	def match(self, name):
+		if self.name is not None:
+			return name == self.name
+		return name == self.field.name
+
 class FieldMappingDialog(QDialog):
 	def __init__(self, col):
 		super(FieldMappingDialog, self).__init__()
@@ -329,10 +339,10 @@ class FieldMappingDialog(QDialog):
 				FieldMappingDialog.clearLayout(child.layout())
 
 	@staticmethod
-	def __findIndexWithData(combobox, predicate):
+	def __findIndexWithData(combobox, name):
 		for index in range(0, combobox.count()):
 			data = combobox.itemData(index)
-			if predicate(data):
+			if data and data.match(name):
 				return index
 		return -1
 
@@ -348,17 +358,21 @@ class FieldMappingDialog(QDialog):
 		fieldSelection = QComboBox()
 		fieldSelection.addItem(u"--- None ---")
 		fieldSelection.insertSeparator(1)
-		for colName in pool.getTextColumnNames():
-			fieldSelection.addItem(u"Text: {}".format(colName), {'type': 'text', 'sub': 'value', 'name': colName})
-			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Alternatives")), {'type': 'text', 'sub': 'alternatives', 'name': colName})
-			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Hidden Alternatives")), {'type': 'text', 'sub': 'hidden_alternatives', 'name': colName})
-			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Typing Corrects")), {'type': 'text', 'sub': 'typing_corrects', 'name': colName})
-		for colName in pool.getImageColumnNames():
-			fieldSelection.addItem(u"Image: {}".format(colName), {'type': 'image', 'name': colName})
-		for colName in pool.getAudioColumnNames():
-			fieldSelection.addItem(u"Audio: {}".format(colName), {'type': 'audio', 'name': colName})
-		for attrName in pool.getAttributeNames():
-			fieldSelection.addItem(u"Attribute: {}".format(attrName), {'type': 'attribute', 'name': attrName})
+		for column in pool.getTextColumns():
+			fieldSelection.addItem(u"Text: {}".format(column.name),
+								FieldHelper(column, memrise.Thing.getDefinitions))
+			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Alternatives")),
+								FieldHelper(column, memrise.Thing.getAlternatives, u"{} {}".format(column.name, _("Alternatives"))))
+			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Hidden Alternatives")),
+								FieldHelper(column, memrise.Thing.getHiddenAlternatives, u"{} {}".format(column.name, _("Hidden Alternatives"))))
+			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Typing Corrects")),
+								FieldHelper(column, memrise.Thing.getTypingCorrects, u"{} {}".format(column.name, _("Typing Corrects"))))
+		for column in pool.getImageColumns():
+			fieldSelection.addItem(u"Image: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalImageUrls))
+		for column in pool.getAudioColumns():
+			fieldSelection.addItem(u"Audio: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalAudioUrls))
+		for attribute in pool.getAttributes():
+			fieldSelection.addItem(u"Attribute: {}".format(attribute.name), FieldHelper(attribute, memrise.Thing.getAttributes))
 		return fieldSelection
 
 	def __buildGrid(self, pool, model):
@@ -366,22 +380,9 @@ class FieldMappingDialog(QDialog):
 
 		self.grid.addWidget(QLabel("Note type fields:"), 0, 0)
 		self.grid.addWidget(QLabel("Memrise fields:"), 0, 1)
-		
-		def findIndex(data, name):
-			if not data:
-				return False
-			if name == data["name"]:
-				return True
-			if data["type"] == "text" and data["sub"] == "alternatives" and name == u"{} {}".format(data["name"], _("Alternatives")):
-				return True
-			if data["type"] == "text" and data["sub"] == "hidden_alternatives" and name == u"{} {}".format(data["name"], _("Hidden Alternatives")):
-				return True
-			if data["type"] == "text" and data["sub"] == "typing_corrects" and name == u"{} {}".format(data["name"], _("Typing Corrects")):
-				return True
-			return False
 				
 		fieldNames = filter(lambda fieldName: not fieldName in [_('Thing'), _('Level')], self.col.models.fieldNames(model))
-		poolFieldCount = pool.countTextColumns()*2 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
+		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
 		
 		mapping = []
 		for index in range(0, max(len(fieldNames), poolFieldCount)):
@@ -394,8 +395,8 @@ class FieldMappingDialog(QDialog):
 			if index < len(fieldNames):
 				modelFieldSelection.setCurrentIndex(index+2)
 			
-			fieldIndex = self.__findIndexWithData(memriseFieldSelection, partial(findIndex, name=modelFieldSelection.currentText()))
-			if fieldIndex >= 0:
+			fieldIndex = self.__findIndexWithData(memriseFieldSelection, modelFieldSelection.currentText())
+			if fieldIndex >= 2:
 				memriseFieldSelection.setCurrentIndex(fieldIndex)
 			
 			mapping.append((modelFieldSelection, memriseFieldSelection))
@@ -582,20 +583,13 @@ class MemriseImportDialog(QDialog):
 		return None
 
 	def getWithSpec(self, thing, spec):
-		if spec['type'] == 'text' and spec['sub'] == 'value':
-			return map(self.prepareText, thing.getDefinitions(spec['name']))
-		elif spec['type'] == 'text' and spec['sub'] == 'alternatives':
-			return map(self.prepareText, thing.getAlternatives(spec['name']))
-		elif spec['type'] == 'text' and spec['sub'] == 'hidden_alternatives':
-			return map(self.prepareText, thing.getHiddenAlternatives(spec['name']))
-		elif spec['type'] == 'text' and spec['sub'] == 'typing_corrects':
-			return map(self.prepareText, thing.getTypingCorrects(spec['name']))
-		elif spec['type'] == 'image':
-			return map(self.prepareImage, thing.getLocalImageUrls(spec['name']))
-		elif spec['type'] == 'audio':
-			return map(self.prepareAudio, thing.getLocalAudioUrls(spec['name']))
-		elif spec['type'] == 'attribute':
-			return map(self.prepareText, thing.getAttributes(spec['name']))
+		values = spec.get(thing)
+		if spec.field.type == memrise.Field.Text:
+			return map(self.prepareText, values)
+		elif spec.field.type == memrise.Field.Image:
+			return map(self.prepareImage, values)
+		elif spec.field.type == memrise.Field.Audio:
+			return map(self.prepareAudio, values)
 		return None
 	
 	def importCourse(self):
