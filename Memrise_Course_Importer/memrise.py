@@ -18,6 +18,7 @@ class Course(object):
         self.target = ""
         self.levels = []
         self.pools = {}
+        self.directions = set()
 
     def __iter__(self):
         for level in self.levels:
@@ -511,6 +512,7 @@ class CourseLoader(object):
 
         level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
         level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
+        course.directions.add(level.direction)
 
         for userData in levelData["thingusers"]:
             level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
