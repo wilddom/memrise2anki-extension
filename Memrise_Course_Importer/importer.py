@@ -190,7 +190,7 @@ class ModelMappingDialog(QDialog):
 			t['qfmt'] += u"{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
 		
 		for colName in filter(notFrontBack, pool.getTextColumnNames()):
-			t['qfmt'] += u"{{"+colName+u"}}\n"
+			t['qfmt'] += u"<br />{{"+colName+u"}}\n"
 			altColName = u"{} {}".format(colName, _("Alternatives"))
 			t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
 		
