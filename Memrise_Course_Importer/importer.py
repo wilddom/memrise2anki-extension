@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 
-import memrise, cookielib, os.path, uuid, sys
+import memrise, cookielib, os.path, uuid, sys, datetime
 from anki.media import MediaManager
 from aqt import mw
 from aqt.qt import *
@@ -180,6 +180,43 @@ class ModelMappingDialog(QDialog):
 		for name in sorted(self.col.models.allNames()):
 			self.modelSelection.addItem(name)
 	
+	@staticmethod
+	def __createTemplate(t, pool, front, back):
+		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
+		
+		t['qfmt'] = u"{{"+front+u"}}\n"
+		if front in pool.getTextColumnNames():
+			frontAlternatives = u"{} {}".format(front, _("Alternatives"))
+			t['qfmt'] += u"{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
+		
+		for colName in filter(notFrontBack, pool.getTextColumnNames()):
+			t['qfmt'] += u"<br />{{"+colName+u"}}\n"
+			altColName = u"{} {}".format(colName, _("Alternatives"))
+			t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
+		
+		for attrName in filter(notFrontBack, pool.getAttributeNames()):
+			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
+		
+		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n"
+		if back in pool.getTextColumnNames():
+			backAlternatives = u"{} {}".format(back, _("Alternatives"))
+			t['afmt'] += u"{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
+		
+		if front == pool.getTextColumnName(0):
+			imageside = 'afmt'
+			audioside = 'qfmt'
+		else:
+			imageside = 'qfmt'
+			audioside = 'afmt'
+			
+		for colName in filter(notFrontBack, pool.getImageColumnNames()):
+			t[imageside] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
+		
+		for colName in filter(notFrontBack, pool.getAudioColumnNames()):
+			t[audioside] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
+		
+		return t
+	
 	def __createMemriseModel(self, course, pool):
 		mm = self.col.models
 				
@@ -214,59 +251,18 @@ class ModelMappingDialog(QDialog):
 		fm = mm.newField(_("Thing"))
 		mm.addField(m, fm)
 		
-		front = pool.getTextColumnName(0)
-		if pool.hasTextColumnName(camelize(course.source)):
-			front = camelize(course.source)
-		elif pool.hasTextColumnName(course.source):
-			front = course.source
-		frontAlternatives = u"{} {}".format(front, _("Alternatives"))
-		
-		back = pool.getTextColumnName(1)
-		if pool.hasTextColumnName(camelize(course.target)):
-			back = camelize(course.target)
-		elif pool.hasTextColumnName(course.target):
-			back = course.target
-		backAlternatives = u"{} {}".format(back, _("Alternatives"))
-		
 		m['css'] += "\n.alts {\n font-size: 14px;\n}"
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
 		
-		t = mm.newTemplate(u"{} -> {}".format(camelize(course.source), camelize(course.target)))
-		t['qfmt'] = u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
-		for colName in pool.getTextColumnNames():
-			if not colName in [front, back]:
-				t['qfmt'] += u"{{"+colName+u"}}\n"
-				altColName = u"{} {}".format(colName, _("Alternatives"))
-				t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
-		for attrName in pool.getAttributeNames():
-			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
-		for colName in pool.getImageColumnNames():
-			t['qfmt'] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
-		for colName in pool.getAudioColumnNames():
-			t['afmt'] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
-		mm.addTemplate(m, t)
-		
-		t = mm.newTemplate(u"{} -> {}".format(camelize(course.target), camelize(course.source)))
-		t['qfmt'] = u"{{"+back+u"}}\n{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
-		for colName in pool.getTextColumnNames():
-			if not colName in [front, back]:
-				t['qfmt'] += u"{{"+colName+u"}}\n"
-				altColName = u"{} {}".format(colName, _("Alternatives"))
-				t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
-		for attrName in pool.getAttributeNames():
-			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
-		for colName in pool.getAudioColumnNames():
-			t['qfmt'] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+front+u"}}\n{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
-		for colName in pool.getImageColumnNames():
-			t['afmt'] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
-		mm.addTemplate(m, t)
+		for direction in course.directions:
+			t = mm.newTemplate(unicode(direction))
+			self.__createTemplate(t, pool, direction.front, direction.back)
+			mm.addTemplate(m, t)
 		
 		return m
 	
 	def __loadModel(self, thing, deck=None):
-		model = self.__createMemriseModel(thing.level.course, thing.pool)
+		model = self.__createMemriseModel(thing.pool.course, thing.pool)
 		
 		modelStored = self.col.models.byName(model['name'])
 		if modelStored:
@@ -300,6 +296,99 @@ class ModelMappingDialog(QDialog):
 		
 		return self.models[thing.pool.id]
 
+class TemplateMappingDialog(QDialog):
+	def __init__(self, col):
+		super(TemplateMappingDialog, self).__init__()
+		self.col = col
+		self.templates = {}
+		
+		self.setWindowTitle("Assign Template Direction")
+		layout = QVBoxLayout(self)
+		
+		self.grid = QGridLayout()
+		layout.addLayout(self.grid)
+		
+		self.grid.addWidget(QLabel("Front:"), 0, 0)
+		self.frontName = QLabel()
+		self.grid.addWidget(self.frontName, 0, 1)
+		self.frontExample = QLabel()
+		self.grid.addWidget(self.frontExample, 0, 2)
+		
+		self.grid.addWidget(QLabel("Back:"), 1, 0)
+		self.backName = QLabel()
+		self.grid.addWidget(self.backName, 1, 1)
+		self.backExample = QLabel()
+		self.grid.addWidget(self.backExample, 1, 2)
+		
+		layout.addWidget(QLabel("Select template:"))
+		self.templateSelection = QComboBox()
+		layout.addWidget(self.templateSelection)
+		self.templateSelection.setToolTip("Select the corresponding template for this direction.")
+		
+		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
+		buttons.accepted.connect(self.accept)
+		layout.addWidget(buttons)
+	
+	def __fillTemplateSelection(self, model):
+		self.templateSelection.clear()
+		for template in model['tmpls']:
+			self.templateSelection.addItem(template['name'], template)
+	
+	@staticmethod
+	def getFirst(values):
+		return values[0] if 0 < len(values) else u''
+	
+	def getTemplate(self, thing, note, direction):
+		model = note.model()
+		if direction in self.templates.get(model['id'], {}):
+			return self.templates[model['id']][direction]
+		
+		for template in model['tmpls']:
+			if template['name'] == unicode(direction):
+				self.templates.setdefault(model['id'], {})[direction] = template
+				return template
+
+		self.frontName.setText(direction.front)
+		frontField = FieldHelper(thing.pool.getColumn(direction.front))
+		self.frontExample.setText(self.getFirst(frontField.get(thing)))
+
+		self.backName.setText(direction.back)
+		backField = FieldHelper(thing.pool.getColumn(direction.back))
+		self.backExample.setText(self.getFirst(backField.get(thing)))
+
+		self.__fillTemplateSelection(model)
+		self.exec_()
+
+		template = self.templateSelection.itemData(self.templateSelection.currentIndex())
+		self.templates.setdefault(model['id'], {})[direction] = template
+		
+		return template
+
+class FieldHelper(object):
+	def __init__(self, field, getter=None, name=None):
+		self.field = field
+		if getter is None:
+			if isinstance(field, memrise.Column):
+				if field.type == memrise.Field.Text:
+					getter = memrise.Thing.getDefinitions
+				elif field.type == memrise.Field.Audio:
+					getter = memrise.Thing.getLocalAudioUrls
+				elif field.type == memrise.Field.Image:
+					getter = memrise.Thing.getLocalImageUrls
+			elif isinstance(field, memrise.Attribute):
+				if field.type == memrise.Field.Text:
+					getter = memrise.Thing.getAttributes
+		self.getter = getter
+		self.name = name
+
+	def get(self, thing):
+		return self.getter(thing, self.field.name)
+
+	def match(self, name):
+		if self.name is not None:
+			return name == self.name
+		return name == self.field.name
+
 class FieldMappingDialog(QDialog):
 	def __init__(self, col):
 		super(FieldMappingDialog, self).__init__()
@@ -329,10 +418,10 @@ class FieldMappingDialog(QDialog):
 				FieldMappingDialog.clearLayout(child.layout())
 
 	@staticmethod
-	def __findIndexWithData(combobox, predicate):
+	def __findIndexWithData(combobox, name):
 		for index in range(0, combobox.count()):
 			data = combobox.itemData(index)
-			if predicate(data):
+			if data and data.match(name):
 				return index
 		return -1
 
@@ -348,17 +437,21 @@ class FieldMappingDialog(QDialog):
 		fieldSelection = QComboBox()
 		fieldSelection.addItem(u"--- None ---")
 		fieldSelection.insertSeparator(1)
-		for colName in pool.getTextColumnNames():
-			fieldSelection.addItem(u"Text: {}".format(colName), {'type': 'text', 'sub': 'value', 'name': colName})
-			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Alternatives")), {'type': 'text', 'sub': 'alternatives', 'name': colName})
-			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Hidden Alternatives")), {'type': 'text', 'sub': 'hidden_alternatives', 'name': colName})
-			fieldSelection.addItem(u"{1}: {0}".format(colName, _("Typing Corrects")), {'type': 'text', 'sub': 'typing_corrects', 'name': colName})
-		for colName in pool.getImageColumnNames():
-			fieldSelection.addItem(u"Image: {}".format(colName), {'type': 'image', 'name': colName})
-		for colName in pool.getAudioColumnNames():
-			fieldSelection.addItem(u"Audio: {}".format(colName), {'type': 'audio', 'name': colName})
-		for attrName in pool.getAttributeNames():
-			fieldSelection.addItem(u"Attribute: {}".format(attrName), {'type': 'attribute', 'name': attrName})
+		for column in pool.getTextColumns():
+			fieldSelection.addItem(u"Text: {}".format(column.name),
+								FieldHelper(column, memrise.Thing.getDefinitions))
+			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Alternatives")),
+								FieldHelper(column, memrise.Thing.getAlternatives, u"{} {}".format(column.name, _("Alternatives"))))
+			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Hidden Alternatives")),
+								FieldHelper(column, memrise.Thing.getHiddenAlternatives, u"{} {}".format(column.name, _("Hidden Alternatives"))))
+			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Typing Corrects")),
+								FieldHelper(column, memrise.Thing.getTypingCorrects, u"{} {}".format(column.name, _("Typing Corrects"))))
+		for column in pool.getImageColumns():
+			fieldSelection.addItem(u"Image: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalImageUrls))
+		for column in pool.getAudioColumns():
+			fieldSelection.addItem(u"Audio: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalAudioUrls))
+		for attribute in pool.getAttributes():
+			fieldSelection.addItem(u"Attribute: {}".format(attribute.name), FieldHelper(attribute, memrise.Thing.getAttributes))
 		return fieldSelection
 
 	def __buildGrid(self, pool, model):
@@ -366,22 +459,9 @@ class FieldMappingDialog(QDialog):
 
 		self.grid.addWidget(QLabel("Note type fields:"), 0, 0)
 		self.grid.addWidget(QLabel("Memrise fields:"), 0, 1)
-		
-		def findIndex(data, name):
-			if not data:
-				return False
-			if name == data["name"]:
-				return True
-			if data["type"] == "text" and data["sub"] == "alternatives" and name == u"{} {}".format(data["name"], _("Alternatives")):
-				return True
-			if data["type"] == "text" and data["sub"] == "hidden_alternatives" and name == u"{} {}".format(data["name"], _("Hidden Alternatives")):
-				return True
-			if data["type"] == "text" and data["sub"] == "typing_corrects" and name == u"{} {}".format(data["name"], _("Typing Corrects")):
-				return True
-			return False
 				
 		fieldNames = filter(lambda fieldName: not fieldName in [_('Thing'), _('Level')], self.col.models.fieldNames(model))
-		poolFieldCount = pool.countTextColumns()*2 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
+		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
 		
 		mapping = []
 		for index in range(0, max(len(fieldNames), poolFieldCount)):
@@ -394,8 +474,8 @@ class FieldMappingDialog(QDialog):
 			if index < len(fieldNames):
 				modelFieldSelection.setCurrentIndex(index+2)
 			
-			fieldIndex = self.__findIndexWithData(memriseFieldSelection, partial(findIndex, name=modelFieldSelection.currentText()))
-			if fieldIndex >= 0:
+			fieldIndex = self.__findIndexWithData(memriseFieldSelection, modelFieldSelection.currentText())
+			if fieldIndex >= 2:
 				memriseFieldSelection.setCurrentIndex(fieldIndex)
 			
 			mapping.append((modelFieldSelection, memriseFieldSelection))
@@ -436,28 +516,6 @@ class MemriseImportDialog(QDialog):
 		self.setWindowTitle("Import Memrise Course")
 		layout = QVBoxLayout(self)
 		
-		layout.addWidget(QLabel("Enter the home URL of the Memrise course to import\n(e.g. http://www.memrise.com/course/77958/memrise-intro-french/):"))
-		
-		self.courseUrlLineEdit = QLineEdit()
-		layout.addWidget(self.courseUrlLineEdit)
-		
-		layout.addWidget(QLabel("Minimal level tag width filled width zeros (e.g. 3 results in Level001):"))
-		self.minimalLevelTagWidthSpinBox = QSpinBox()
-		self.minimalLevelTagWidthSpinBox.setMinimum(1)
-		self.minimalLevelTagWidthSpinBox.setMaximum(9)
-		self.minimalLevelTagWidthSpinBox.setValue(2)
-		layout.addWidget(self.minimalLevelTagWidthSpinBox)
-		
-		self.downloadMediaCheckBox = QCheckBox("Download media files")
-		layout.addWidget(self.downloadMediaCheckBox)
-		
-		self.skipExistingMediaCheckBox = QCheckBox("Skip download of existing media files")
-		layout.addWidget(self.skipExistingMediaCheckBox)
-		
-		self.downloadMediaCheckBox.stateChanged.connect(self.skipExistingMediaCheckBox.setEnabled)
-		self.downloadMediaCheckBox.setChecked(True)
-		self.skipExistingMediaCheckBox.setChecked(True)
-		
 		self.deckSelection = QComboBox()
 		self.deckSelection.addItem("--- create new ---")
 		self.deckSelection.insertSeparator(1)
@@ -471,6 +529,43 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(self.deckSelection)
 		self.deckSelection.currentIndexChanged.connect(self.loadDeckUrl)
 		
+		label = QLabel("Enter the home URL of the Memrise course to import:")
+		self.courseUrlLineEdit = QLineEdit()
+		courseUrlTooltip = "e.g. http://www.memrise.com/course/77958/memrise-intro-french/"
+		label.setToolTip(courseUrlTooltip)
+		self.courseUrlLineEdit.setToolTip(courseUrlTooltip)
+		layout.addWidget(label)
+		layout.addWidget(self.courseUrlLineEdit)
+		
+		label = QLabel("Minimal level tag width filled width zeros:")
+		self.minimalLevelTagWidthSpinBox = QSpinBox()
+		self.minimalLevelTagWidthSpinBox.setMinimum(1)
+		self.minimalLevelTagWidthSpinBox.setMaximum(9)
+		self.minimalLevelTagWidthSpinBox.setValue(2)
+		minimalLevelTagWidthTooltip = "e.g. 3 results in Level001"
+		label.setToolTip(minimalLevelTagWidthTooltip)
+		self.minimalLevelTagWidthSpinBox.setToolTip(minimalLevelTagWidthTooltip)
+		layout.addWidget(label)
+		layout.addWidget(self.minimalLevelTagWidthSpinBox)
+
+		self.importScheduleCheckBox = QCheckBox("Import scheduler information")
+		self.importScheduleCheckBox.setChecked(True)
+		self.importScheduleCheckBox.setToolTip("e.g. next due date, interval, etc.")
+		layout.addWidget(self.importScheduleCheckBox)
+		def setScheduler(checkbox, predicate, index):
+			checkbox.setChecked(predicate(index))
+		self.deckSelection.currentIndexChanged.connect(partial(setScheduler,self.importScheduleCheckBox,lambda i: i==0))
+
+		self.downloadMediaCheckBox = QCheckBox("Download media files")
+		layout.addWidget(self.downloadMediaCheckBox)
+		
+		self.skipExistingMediaCheckBox = QCheckBox("Skip download of existing media files")
+		layout.addWidget(self.skipExistingMediaCheckBox)
+		
+		self.downloadMediaCheckBox.stateChanged.connect(self.skipExistingMediaCheckBox.setEnabled)
+		self.downloadMediaCheckBox.setChecked(True)
+		self.skipExistingMediaCheckBox.setChecked(True)
+
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
 		
 		self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
@@ -499,6 +594,7 @@ class MemriseImportDialog(QDialog):
 		
 		self.modelMapper = ModelMappingDialog(mw.col)
 		self.fieldMapper = FieldMappingDialog(mw.col)
+		self.templateMapper = TemplateMappingDialog(mw.col)
 	
 	def prepareTitleTag(self, tag):
 		value = u''.join(x for x in tag.title() if x.isalnum())
@@ -507,11 +603,11 @@ class MemriseImportDialog(QDialog):
 		return value
 	
 	def prepareLevelTag(self, levelNum, width):
-		formatstr = u"Level{:0"+str(width)+"d}"
+		formatstr = u"Level{:0"+unicode(width)+"d}"
 		return formatstr.format(levelNum)
 	
 	def getLevelTags(self, levelCount, level):
-		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(str(levelCount))))]
+		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(unicode(levelCount))))]
 		titleTag = self.prepareTitleTag(level.title)
 		if titleTag:
 			tags.append(titleTag)
@@ -563,31 +659,25 @@ class MemriseImportDialog(QDialog):
 		notes = mw.col.findNotes(u'deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
 		if notes:
 			return mw.col.getNote(notes[0])
-		
-		fields = [(camelize(course.source), camelize(course.target)), (thing.pool.getTextColumnName(0), thing.pool.getTextColumnName(1)), (_('Front'), _('Back')), ('Front', 'Back')]
-		for pair in fields:
-			notes = mw.col.findNotes(u'deck:"{}" "{}:{}" "{}:{}"'.format(deckName, pair[0], u"<br/>".join(thing.getDefinitions(0,1)), pair[1], u"<br/>".join(thing.getDefinitions(1, None))))
-			if notes:
-				return mw.col.getNote(notes[0])
 			
 		return None
 
 	def getWithSpec(self, thing, spec):
-		if spec['type'] == 'text' and spec['sub'] == 'value':
-			return self.prepareText(thing.getDefinition(spec['name']))
-		elif spec['type'] == 'text' and spec['sub'] == 'alternatives':
-			return map(self.prepareText, thing.getAlternatives(spec['name']))
-		elif spec['type'] == 'text' and spec['sub'] == 'hidden_alternatives':
-			return map(self.prepareText, thing.getHiddenAlternatives(spec['name']))
-		elif spec['type'] == 'text' and spec['sub'] == 'typing_corrects':
-			return map(self.prepareText, thing.getTypingCorrects(spec['name']))
-		elif spec['type'] == 'image':
-			return map(self.prepareImage, thing.getLocalImageUrls(spec['name']))
-		elif spec['type'] == 'audio':
-			return map(self.prepareAudio, thing.getLocalAudioUrls(spec['name']))
-		elif spec['type'] == 'attribute':
-			return self.prepareText(thing.getAttribute(spec['name']))
+		values = spec.get(thing)
+		if spec.field.type == memrise.Field.Text:
+			return map(self.prepareText, values)
+		elif spec.field.type == memrise.Field.Image:
+			return map(self.prepareImage, values)
+		elif spec.field.type == memrise.Field.Audio:
+			return map(self.prepareAudio, values)
 		return None
+	
+	@staticmethod
+	def toList(values):
+		if hasattr(values, '__iter__'):
+			return values
+		else:
+			return [values]
 	
 	def importCourse(self):
 		if self.loader.isException():
@@ -596,63 +686,84 @@ class MemriseImportDialog(QDialog):
 			exc_info = self.loader.getExceptionInfo()
 			raise exc_info[0], exc_info[1], exc_info[2]
 		
-		self.progressBar.setValue(0)
-		self.progressBar.setFormat("Importing: %p% (%v/%m)")
-		
-		course = self.loader.getResult()
-		
-		noteCache = {}
-		
-		deck = None
-		if self.deckSelection.currentIndex() != 0:
-			deck = self.selectDeck(self.deckSelection.currentText(), merge=True)
-		else:
-			deck = self.selectDeck(course.title, merge=False)
-		self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
-				
-		for level in course:
-			tags = self.getLevelTags(len(course), level)
-			for thing in level:
-				if thing.id in noteCache:
-					ankiNote = noteCache[thing.id]
-				else:
-					ankiNote = self.findExistingNote(deck['name'], course, thing)
-				if not ankiNote:
-					model = self.modelMapper.getModel(thing, deck)
-					self.saveDeckModelRelation(deck, model)
-					ankiNote = mw.col.newNote()
-				
-				mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
-				for field, data in mapping.iteritems():
-					values = []
-					for spec in data:
-						value = self.getWithSpec(thing, spec)
-						if hasattr(value, '__iter__'):
-							if len(value):
-								values.extend(value)
-						else:
-							if value:
-								values.append(value)
-					ankiNote[field] = u", ".join(values)
-
-				if _('Level') in ankiNote.keys():
-					levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
-					levels.add(str(level.index))
-					ankiNote[_('Level')] = u', '.join(levels)
-				
-				if _('Thing') in ankiNote.keys():
-					ankiNote[_('Thing')] = thing.id
-				
-				for tag in tags:
-					ankiNote.addTag(tag)
+		try:
+			self.progressBar.setValue(0)
+			self.progressBar.setFormat("Importing: %p% (%v/%m)")
+			
+			course = self.loader.getResult()
+			
+			noteCache = {}
+			
+			deck = None
+			if self.deckSelection.currentIndex() != 0:
+				deck = self.selectDeck(self.deckSelection.currentText(), merge=True)
+			else:
+				deck = self.selectDeck(course.title, merge=False)
+			self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
 					
-				if not ankiNote.cards():
-					mw.col.addNote(ankiNote)
-				ankiNote.flush()
-				noteCache[thing.id] = ankiNote
-				
-				self.progressBar.setValue(self.progressBar.value()+1)
-				QApplication.processEvents()
+			for level in course:
+				tags = self.getLevelTags(len(course), level)
+				for thing in level:
+					if thing.id in noteCache:
+						ankiNote = noteCache[thing.id]
+					else:
+						ankiNote = self.findExistingNote(deck['name'], course, thing)
+					if not ankiNote:
+						model = self.modelMapper.getModel(thing, deck)
+						self.saveDeckModelRelation(deck, model)
+						ankiNote = mw.col.newNote()
+					
+					mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
+					for field, data in mapping.iteritems():
+						values = []
+						for spec in data:
+							values.extend(self.toList(self.getWithSpec(thing, spec)))
+						ankiNote[field] = u", ".join(values)
+	
+					if _('Level') in ankiNote.keys():
+						levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
+						levels.add(unicode(level.index))
+						ankiNote[_('Level')] = u', '.join(levels)
+					
+					if _('Thing') in ankiNote.keys():
+						ankiNote[_('Thing')] = unicode(thing.id)
+					
+					for tag in tags:
+						ankiNote.addTag(tag)
+						
+					if not ankiNote.cards():
+						mw.col.addNote(ankiNote)
+					ankiNote.flush()
+					noteCache[thing.id] = ankiNote
+	
+					if self.importScheduleCheckBox.isChecked():
+						scheduleInfo = thing.pool.schedule.get(level.direction, thing)
+						if scheduleInfo:
+							template = self.templateMapper.getTemplate(thing, ankiNote, scheduleInfo.direction)
+							cards = [card for card in ankiNote.cards() if card.ord == template['ord']]
+							
+							if scheduleInfo.interval is not None:
+								for card in cards:
+									card.type = 2
+									card.queue = 2
+									card.ivl = int(round(scheduleInfo.interval))
+									card.reps = scheduleInfo.total
+									card.lapses = scheduleInfo.incorrect
+									card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
+									card.factor = 2500
+									card.flush()
+	
+							if scheduleInfo.ignored:
+								mw.col.sched.suspendCards([card.id for card in cards])
+	
+					self.progressBar.setValue(self.progressBar.value()+1)
+					QApplication.processEvents()
+		
+		except Exception:
+			self.buttons.show()
+			self.progressBar.hide()
+			exc_info = sys.exc_info()
+			raise exc_info[0], exc_info[1], exc_info[2]
 		
 		mw.col.reset()
 		mw.reset()
