@@ -15,7 +15,7 @@ Templates (Card type)
 ---------------------
 
 Templates are generated for the directions you are tested on Memrise. Only when the course creator creates a level with
-reversed columns, we generate a template for this direction. But you are free to create you own card types in Anki
+reversed columns, we generate a template for this direction. But you are free to create your own card types in Anki
 after the import.
 
 Field mapping
