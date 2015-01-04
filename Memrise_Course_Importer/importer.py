@@ -675,9 +675,11 @@ class MemriseImportDialog(QDialog):
 	@staticmethod
 	def toList(values):
 		if hasattr(values, '__iter__'):
-			return values
-		else:
+			return filter(None, values)
+		elif values:
 			return [values]
+		else:
+			return []
 	
 	def importCourse(self):
 		if self.loader.isException():
