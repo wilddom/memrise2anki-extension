@@ -100,21 +100,26 @@ class NameUniquifier(object):
         return u"{} {}".format(key, self.names[key])
 
 class Column(object):
+    Text = 'text'
+    Audio = 'audio'
+    Image = 'image'
+    Types = [Column.Text, Column.Audio, Column.Image]
+    
     def __init__(self, colType, name, index):
         self.type = colType
         self.name = name
         self.index = index
 
 class Attribute(object):
+    Text = 'text'
+    Types = [Attribute.Text]
+    
     def __init__(self, attrType, name, index):
         self.type = attrType
         self.name = name
         self.index = index
 
 class Pool(object):
-    columnTypes = ['text', 'audio', 'image']
-    attributeTypes = ['text']
-    
     def __init__(self, poolId=None):
         self.id = poolId
         self.name = ''
@@ -124,7 +129,7 @@ class Pool(object):
         self.attributes = collections.OrderedDict()
 
         self.columnsByType = collections.OrderedDict()
-        for colType in self.columnTypes:
+        for colType in Column.Types:
             self.columnsByType[colType] = collections.OrderedDict()
         self.columnsByIndex = collections.OrderedDict()
         
@@ -133,7 +138,7 @@ class Pool(object):
         self.schedule = Schedule()
 
     def addColumn(self, colType, name, index):
-        if not colType in self.columnTypes:
+        if not colType in Column.Types:
             return
         
         column = Column(colType, self.uniquifyName(name), int(index))
@@ -142,7 +147,7 @@ class Pool(object):
         self.columnsByIndex[column.index] = column
 
     def addAttribute(self, attrType, name, index):
-        if not attrType in self.attributeTypes:
+        if not attrType in Attribute.Types:
             return
         
         attribute = Attribute(attrType, self.uniquifyName(name), int(index))
@@ -164,25 +169,25 @@ class Pool(object):
         return len(self.columns)
 
     def getTextColumnNames(self):
-        return self.columnsByType['text'].keys()
+        return self.columnsByType[Column.Text].keys()
 
     def getImageColumnNames(self):
-        return self.columnsByType['image'].keys()
+        return self.columnsByType[Column.Image].keys()
     
     def getAudioColumnNames(self):
-        return self.columnsByType['audio'].keys()
+        return self.columnsByType[Column.Audio].keys()
     
     def getAttributeNames(self):
         return self.attributes.keys()
     
     def getTextColumns(self):
-        return self.columnsByType['text'].values()
+        return self.columnsByType[Column.Text].values()
 
     def getImageColumns(self):
-        return self.columnsByType['image'].values()
+        return self.columnsByType[Column.Image].values()
     
     def getAudioColumns(self):
-        return self.columnsByType['audio'].values()
+        return self.columnsByType[Column.Audio].values()
     
     def getAttributes(self):
         return self.attributes.values()
@@ -218,13 +223,13 @@ class Pool(object):
         return name in self.getAttributeNames()
 
     def countTextColumns(self):
-        return len(self.columnsByType['text'])
+        return len(self.columnsByType[Column.Text])
     
     def countImageColumns(self):
-        return len(self.columnsByType['image'])
+        return len(self.columnsByType[Column.Image])
     
     def countAudioColumns(self):
-        return len(self.columnsByType['audio'])
+        return len(self.columnsByType[Column.Audio])
     
     def countAttributes(self):
         return len(self.attributes)
@@ -252,7 +257,7 @@ class Thing(object):
         
         self.columnData = collections.OrderedDict()
         self.columnDataByType = collections.OrderedDict()
-        for colType in Pool.columnTypes:
+        for colType in Column.Types:
             self.columnDataByType[colType] = collections.OrderedDict()
         
         self.attributeData = collections.OrderedDict()
@@ -262,15 +267,15 @@ class Thing(object):
     
     def getTextColumnData(self, nameOrIndex):
         name = self.pool.getTextColumnName(nameOrIndex)
-        return self.columnDataByType['text'][name]
+        return self.columnDataByType[Column.Text][name]
     
     def getAudioColumnData(self, nameOrIndex):
         name = self.pool.getAudioColumnName(nameOrIndex)
-        return self.columnDataByType['audio'][name]
+        return self.columnDataByType[Column.Audio][name]
     
     def getImageColumnData(self, nameOrIndex):
         name = self.pool.getImageColumnName(nameOrIndex)
-        return self.columnDataByType['image'][name]
+        return self.columnDataByType[Column.Image][name]
     
     def getAttributeData(self, nameOrIndex):
         name = self.pool.getAttributeName(nameOrIndex)
@@ -278,17 +283,17 @@ class Thing(object):
     
     def setTextColumnData(self, nameOrIndex, data):
         name = self.pool.getTextColumnName(nameOrIndex)
-        self.columnDataByType['text'][name] = data
+        self.columnDataByType[Column.Text][name] = data
         self.columnData[name] = data
     
     def setAudioColumnData(self, nameOrIndex, data):
         name = self.pool.getTextColumnName(nameOrIndex)
-        self.columnDataByType['audio'][name] = data
+        self.columnDataByType[Column.Audio][name] = data
         self.columnData[name] = data
         
     def setImageColumnData(self, nameOrIndex, data):
         name = self.pool.getTextColumnName(nameOrIndex)
-        self.columnDataByType['image'][name] = data
+        self.columnDataByType[Column.Image][name] = data
         self.columnData[name] = data
     
     def setAttributeData(self, nameOrIndex, data):
