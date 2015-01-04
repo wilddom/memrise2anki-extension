@@ -11,6 +11,13 @@ audio and levels. This is done because it's not possible to accurately reproduce
 But having the fields separate gives the flexibility to rebuild them manually with Anki templates.
 All fields can be renamed and reordered freely.
 
+Templates (Card type)
+---------------------
+
+Templates are generated for the directions you are tested on Memrise. Only when the course creator creates a level with
+reversed columns, we generate a template for this direction. But you are free to create you own card types in Anki
+after the import.
+
 Field mapping
 -------------
 
@@ -31,6 +38,13 @@ Memrise levels are stored in a field and notes get a corresponding tag. Creating
 that's not the way Anki should be used ([Using Decks Appropriately](http://ankisrs.net/docs/manual.html#manydecks)). Instead 
 [Filtered Decks](http://ankisrs.net/docs/am-manual.html#filtered) and the level tags can be used to learn levels separately.
 
+Intervals
+---------
+
+Progress (intervals, due dates, etc.) from Memrise can be imported. But be cautious to not overwrite your local Anki progress in
+case you want to update an already downloaded deck. If the templates have been renamed manually, a dialog will help you to
+assign the existing template to a testing direction.
+
 Bug Reports
 -----------
 
@@ -40,5 +54,6 @@ Credits
 -------
 
 This is more or less a complete rewrite of Pete Schlette's original addon (https://github.com/pschlette/memrise2anki-extension).
+Thanks to Slava Shklyaev (https://github.com/slava-sh) for the first version of the interval import.
 
 
