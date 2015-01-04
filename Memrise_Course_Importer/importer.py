@@ -320,7 +320,7 @@ class TemplateMappingDialog(QDialog):
 		self.backExample = QLabel()
 		self.grid.addWidget(self.backExample, 1, 2)
 		
-		layout.addWidget(QLabel("Select template for direction:"))
+		layout.addWidget(QLabel("Select template:"))
 		self.templateSelection = QComboBox()
 		layout.addWidget(self.templateSelection)
 		self.templateSelection.setToolTip("Select the corresponding template for this direction.")
@@ -686,77 +686,84 @@ class MemriseImportDialog(QDialog):
 			exc_info = self.loader.getExceptionInfo()
 			raise exc_info[0], exc_info[1], exc_info[2]
 		
-		self.progressBar.setValue(0)
-		self.progressBar.setFormat("Importing: %p% (%v/%m)")
-		
-		course = self.loader.getResult()
-		
-		noteCache = {}
-		
-		deck = None
-		if self.deckSelection.currentIndex() != 0:
-			deck = self.selectDeck(self.deckSelection.currentText(), merge=True)
-		else:
-			deck = self.selectDeck(course.title, merge=False)
-		self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
-				
-		for level in course:
-			tags = self.getLevelTags(len(course), level)
-			for thing in level:
-				if thing.id in noteCache:
-					ankiNote = noteCache[thing.id]
-				else:
-					ankiNote = self.findExistingNote(deck['name'], course, thing)
-				if not ankiNote:
-					model = self.modelMapper.getModel(thing, deck)
-					self.saveDeckModelRelation(deck, model)
-					ankiNote = mw.col.newNote()
-				
-				mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
-				for field, data in mapping.iteritems():
-					values = []
-					for spec in data:
-						values.extend(self.toList(self.getWithSpec(thing, spec)))
-					ankiNote[field] = u", ".join(values)
-
-				if _('Level') in ankiNote.keys():
-					levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
-					levels.add(unicode(level.index))
-					ankiNote[_('Level')] = u', '.join(levels)
-				
-				if _('Thing') in ankiNote.keys():
-					ankiNote[_('Thing')] = unicode(thing.id)
-				
-				for tag in tags:
-					ankiNote.addTag(tag)
+		try:
+			self.progressBar.setValue(0)
+			self.progressBar.setFormat("Importing: %p% (%v/%m)")
+			
+			course = self.loader.getResult()
+			
+			noteCache = {}
+			
+			deck = None
+			if self.deckSelection.currentIndex() != 0:
+				deck = self.selectDeck(self.deckSelection.currentText(), merge=True)
+			else:
+				deck = self.selectDeck(course.title, merge=False)
+			self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
 					
-				if not ankiNote.cards():
-					mw.col.addNote(ankiNote)
-				ankiNote.flush()
-				noteCache[thing.id] = ankiNote
-
-				if self.importScheduleCheckBox.isChecked():
-					scheduleInfo = thing.pool.schedule.get(level.direction, thing)
-					if scheduleInfo:
-						template = self.templateMapper.getTemplate(thing, ankiNote, scheduleInfo.direction)
-						cards = [card for card in ankiNote.cards() if card.ord == template['ord']]
+			for level in course:
+				tags = self.getLevelTags(len(course), level)
+				for thing in level:
+					if thing.id in noteCache:
+						ankiNote = noteCache[thing.id]
+					else:
+						ankiNote = self.findExistingNote(deck['name'], course, thing)
+					if not ankiNote:
+						model = self.modelMapper.getModel(thing, deck)
+						self.saveDeckModelRelation(deck, model)
+						ankiNote = mw.col.newNote()
+					
+					mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
+					for field, data in mapping.iteritems():
+						values = []
+						for spec in data:
+							values.extend(self.toList(self.getWithSpec(thing, spec)))
+						ankiNote[field] = u", ".join(values)
+	
+					if _('Level') in ankiNote.keys():
+						levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
+						levels.add(unicode(level.index))
+						ankiNote[_('Level')] = u', '.join(levels)
+					
+					if _('Thing') in ankiNote.keys():
+						ankiNote[_('Thing')] = unicode(thing.id)
+					
+					for tag in tags:
+						ankiNote.addTag(tag)
 						
-						if scheduleInfo.interval is not None:
-							for card in cards:
-								card.type = 2
-								card.queue = 2
-								card.ivl = int(round(scheduleInfo.interval))
-								card.reps = scheduleInfo.total
-								card.lapses = scheduleInfo.incorrect
-								card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
-								card.factor = 2500
-								card.flush()
-
-						if scheduleInfo.ignored:
-							mw.col.sched.suspendCards([card.id for card in cards])
-
-				self.progressBar.setValue(self.progressBar.value()+1)
-				QApplication.processEvents()
+					if not ankiNote.cards():
+						mw.col.addNote(ankiNote)
+					ankiNote.flush()
+					noteCache[thing.id] = ankiNote
+	
+					if self.importScheduleCheckBox.isChecked():
+						scheduleInfo = thing.pool.schedule.get(level.direction, thing)
+						if scheduleInfo:
+							template = self.templateMapper.getTemplate(thing, ankiNote, scheduleInfo.direction)
+							cards = [card for card in ankiNote.cards() if card.ord == template['ord']]
+							
+							if scheduleInfo.interval is not None:
+								for card in cards:
+									card.type = 2
+									card.queue = 2
+									card.ivl = int(round(scheduleInfo.interval))
+									card.reps = scheduleInfo.total
+									card.lapses = scheduleInfo.incorrect
+									card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
+									card.factor = 2500
+									card.flush()
+	
+							if scheduleInfo.ignored:
+								mw.col.sched.suspendCards([card.id for card in cards])
+	
+					self.progressBar.setValue(self.progressBar.value()+1)
+					QApplication.processEvents()
+		
+		except Exception:
+			self.buttons.show()
+			self.progressBar.hide()
+			exc_info = sys.exc_info()
+			raise exc_info[0], exc_info[1], exc_info[2]
 		
 		mw.col.reset()
 		mw.reset()
