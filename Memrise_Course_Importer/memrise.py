@@ -37,6 +37,9 @@ class Direction(object):
     
     def __eq__(self, other):
         return (self.front, self.back) == (other.front, other.back)
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __unicode__(self):
         return u"{} -> {}".format(self.front, self.back)
