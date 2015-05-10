@@ -84,7 +84,7 @@ class MemCollection(object):
         self.thingDirection.setdefault(mem.thingId, {})[mem.direction] = mem
         
     def get(self, direction, thing):
-        return self.directionThing.get(direction, {}).get(thing.id)
+        return self.directionThing.get(direction, {}).get(thing.id, Mem())
 
     def getMems(self, thing):
         return self.thingDirection.get(thing.id, {})
