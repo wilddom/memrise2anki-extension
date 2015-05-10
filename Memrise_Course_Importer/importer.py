@@ -230,7 +230,7 @@ class ModelMappingDialog(QDialog):
 			t[audioside] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
 		
 		if withMem:
-			memField = u"{} {}".format(back, _("Mem"))
+			memField = u"{} -> {} {}".format(front, back, _("Mem"))
 			t['afmt'] += u"{{#"+memField+u"}}<br />{{"+memField+u"}}{{/"+memField+"}}\n"
 		
 		return t
@@ -265,7 +265,7 @@ class ModelMappingDialog(QDialog):
 		
 		if self.memsEnabled:
 			for direction in pool.mems.getDirections():
-				fm = mm.newField(u"{} {}".format(direction.back, _("Mem")))
+				fm = mm.newField(u"{} -> {} {}".format(direction.front, direction.back, _("Mem")))
 				mm.addField(m, fm)
 		
 		fm = mm.newField(_("Level"))
@@ -485,8 +485,8 @@ class FieldMappingDialog(QDialog):
 			fieldSelection.addItem(u"Attribute: {}".format(attribute.name), FieldHelper(attribute, memrise.Thing.getAttributes))
 		if self.memsEnabled:
 			for direction in pool.mems.getDirections():
-				fieldSelection.addItem(u"Mem: {}".format(direction.back),
-									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), u"{} {}".format(direction.back, _("Mem"))))
+				fieldSelection.addItem(u"Mem: {} -> {}".format(direction.front, direction.back),
+									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), u"{} -> {} {}".format(direction.front, direction.back, _("Mem"))))
 			
 		return fieldSelection
 

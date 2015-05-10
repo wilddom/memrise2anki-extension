@@ -32,6 +32,9 @@ class Direction(object):
         self.front = front
         self.back = back
         
+    def isValid(self):
+        return self.front != None and self.back != None
+        
     def __hash__(self):
         return hash((self.front, self.back))
     
@@ -524,11 +527,13 @@ class CourseLoader(object):
         return pool
     
     @staticmethod
-    def loadScheduleInfo(data, pool):
+    def loadScheduleInfo(data, pool, levelDirection):
         scheduleInfo = ScheduleInfo()
         scheduleInfo.thingId = data['thing_id']
         scheduleInfo.direction.front = pool.getColumnName(data["column_b"])
         scheduleInfo.direction.back = pool.getColumnName(data["column_a"])
+        if not scheduleInfo.direction.isValid():
+            scheduleInfo.direction = levelDirection
         scheduleInfo.ignored = data['ignored']
         scheduleInfo.interval = data['interval']
         scheduleInfo.correct = data['total_correct']
@@ -539,11 +544,13 @@ class CourseLoader(object):
         return scheduleInfo
     
     @staticmethod
-    def loadMem(data, pool, fixUrl=lambda url: url):
+    def loadMem(data, pool, levelDirection, fixUrl=lambda url: url):
         mem = Mem(data['id'])
         mem.thingId = data['thing_id']
         mem.direction.front = pool.getColumnName(data["column_b"])
         mem.direction.back = pool.getColumnName(data["column_a"])
+        if not mem.direction.isValid():
+            mem.direction = levelDirection
         mem.text = data['text']
         mem.remoteImageUrl = fixUrl(data['image_output_url'])
         return mem
@@ -571,11 +578,11 @@ class CourseLoader(object):
         course.directions.add(level.direction)
 
         for userData in levelData["thingusers"]:
-            level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
+            level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool, level.direction))
 
         for _, memData in levelData["mems"].items():
             for _, memRowData in memData.items():
-                level.pool.mems.add(self.loadMem(memRowData, level.pool, self.service.toAbsoluteMediaUrl))
+                level.pool.mems.add(self.loadMem(memRowData, level.pool, level.direction, self.service.toAbsoluteMediaUrl))
 
         thingLoader = ThingLoader(level.pool)
         for _, thingRowData in levelData["things"].items():
