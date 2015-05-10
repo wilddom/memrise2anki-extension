@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 
-import memrise, cookielib, os.path, uuid, sys, datetime
+import memrise, cookielib, os.path, uuid, sys, datetime, re
 from anki.media import MediaManager
 from aqt import mw
 from aqt.qt import *
@@ -46,10 +46,18 @@ class MemriseCourseLoader(QObject):
 				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
 			for colName in thing.pool.getAudioColumnNames():
 				thing.setLocalAudioUrls(colName, filter(bool, map(download, thing.getAudioUrls(colName))))
+		
+		def downloadMems(self, thing):
+			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
+			for mem in thing.pool.mems.getMems(thing).values():
+				if mem.isImageMem():
+					mem.localImageUrl = download(mem.remoteImageUrl)
 			
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
 				self.downloadMedia(thing)
+			if thing and self.sender.downloadMems:
+				self.downloadMems(thing)
 			self.thingsLoaded += 1
 			self.sender.thingsLoadedChanged.emit(self.thingsLoaded)
 			self.totalLoaded += 1
@@ -80,6 +88,7 @@ class MemriseCourseLoader(QObject):
 		self.exc_info = (None,None,None)
 		self.downloadMedia = True
 		self.skipExistingMedia = True
+		self.downloadMems = True
 	
 	def load(self, url):
 		self.url = url
@@ -172,6 +181,11 @@ class ModelMappingDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		layout.addWidget(buttons)
+		
+		self.memsEnabled = False
+		
+	def setMemsEnabled(self, value):
+		self.memsEnabled = value
 	
 	def __fillModelSelection(self):
 		self.modelSelection.clear()
@@ -181,7 +195,7 @@ class ModelMappingDialog(QDialog):
 			self.modelSelection.addItem(name)
 	
 	@staticmethod
-	def __createTemplate(t, pool, front, back):
+	def __createTemplate(t, pool, front, back, withMem):
 		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
 		
 		t['qfmt'] = u"{{"+front+u"}}\n"
@@ -215,6 +229,10 @@ class ModelMappingDialog(QDialog):
 		for colName in filter(notFrontBack, pool.getAudioColumnNames()):
 			t[audioside] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
 		
+		if withMem:
+			memField = u"{} {}".format(back, _("Mem"))
+			t['afmt'] += u"{{#"+memField+u"}}<br />{{"+memField+u"}}{{/"+memField+"}}\n"
+		
 		return t
 	
 	def __createMemriseModel(self, course, pool):
@@ -245,6 +263,11 @@ class ModelMappingDialog(QDialog):
 			fm = mm.newField(colName)
 			mm.addField(m, fm)
 		
+		if self.memsEnabled:
+			for direction in pool.mems.getDirections():
+				fm = mm.newField(u"{} {}".format(direction.back, _("Mem")))
+				mm.addField(m, fm)
+		
 		fm = mm.newField(_("Level"))
 		mm.addField(m, fm)
 		
@@ -256,7 +279,7 @@ class ModelMappingDialog(QDialog):
 		
 		for direction in course.directions:
 			t = mm.newTemplate(unicode(direction))
-			self.__createTemplate(t, pool, direction.front, direction.back)
+			self.__createTemplate(t, pool, direction.front, direction.back, self.memsEnabled and direction in pool.mems.getDirections())
 			mm.addTemplate(m, t)
 		
 		return m
@@ -378,6 +401,9 @@ class FieldHelper(object):
 			elif isinstance(field, memrise.Attribute):
 				if field.type == memrise.Field.Text:
 					getter = memrise.Thing.getAttributes
+			elif isinstance(field, memrise.Field):
+				if field.type == memrise.Field.Mem:
+					getter = None
 		self.getter = getter
 		self.name = name
 
@@ -407,6 +433,11 @@ class FieldMappingDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		layout.addWidget(buttons)
+		
+		self.memsEnabled = False
+
+	def setMemsEnabled(self, value):
+		self.memsEnabled = value
 
 	@staticmethod
 	def clearLayout(layout):
@@ -452,6 +483,11 @@ class FieldMappingDialog(QDialog):
 			fieldSelection.addItem(u"Audio: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalAudioUrls))
 		for attribute in pool.getAttributes():
 			fieldSelection.addItem(u"Attribute: {}".format(attribute.name), FieldHelper(attribute, memrise.Thing.getAttributes))
+		if self.memsEnabled:
+			for direction in pool.mems.getDirections():
+				fieldSelection.addItem(u"Mem: {}".format(direction.back),
+									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), u"{} {}".format(direction.back, _("Mem"))))
+			
 		return fieldSelection
 
 	def __buildGrid(self, pool, model):
@@ -462,6 +498,8 @@ class FieldMappingDialog(QDialog):
 				
 		fieldNames = filter(lambda fieldName: not fieldName in [_('Thing'), _('Level')], self.col.models.fieldNames(model))
 		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
+		if self.memsEnabled:
+			poolFieldCount += pool.mems.countDirections()
 		
 		mapping = []
 		for index in range(0, max(len(fieldNames), poolFieldCount)):
@@ -556,6 +594,12 @@ class MemriseImportDialog(QDialog):
 			checkbox.setChecked(predicate(index))
 		self.deckSelection.currentIndexChanged.connect(partial(setScheduler,self.importScheduleCheckBox,lambda i: i==0))
 
+		self.importMemsCheckBox = QCheckBox("Import mems")
+		self.importMemsCheckBox.setChecked(True)
+		importMemsTooltip = "activate \"Download media files\" in order to download image mems"
+		self.importMemsCheckBox.setToolTip(importMemsTooltip)
+		layout.addWidget(self.importMemsCheckBox)
+
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
 		
@@ -615,6 +659,8 @@ class MemriseImportDialog(QDialog):
 		
 	@staticmethod
 	def prepareText(content):
+		content = re.sub(r"\*([^\*]+)\*", '<strong>\\1</strong>', content)
+		content = re.sub(r"_([^_]+)_", '<em>\\1</em>', content)
 		return u'{:s}'.format(content.strip())
 	
 	@staticmethod
@@ -670,6 +716,12 @@ class MemriseImportDialog(QDialog):
 			return map(self.prepareImage, values)
 		elif spec.field.type == memrise.Field.Audio:
 			return map(self.prepareAudio, values)
+		elif spec.field.type == memrise.Field.Mem:
+			if values.isTextMem():
+				return self.prepareText(values.get())
+			if values.isImageMem():
+				return self.prepareImage(values.get())
+						
 		return None
 	
 	@staticmethod
@@ -694,6 +746,9 @@ class MemriseImportDialog(QDialog):
 			
 			course = self.loader.getResult()
 			
+			self.modelMapper.setMemsEnabled(self.importMemsCheckBox.isEnabled())
+			self.fieldMapper.setMemsEnabled(self.importMemsCheckBox.isEnabled())
+			
 			noteCache = {}
 			
 			deck = None
@@ -702,7 +757,7 @@ class MemriseImportDialog(QDialog):
 			else:
 				deck = self.selectDeck(course.title, merge=False)
 			self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
-					
+			
 			for level in course:
 				tags = self.getLevelTags(len(course), level)
 				for thing in level:
@@ -757,7 +812,7 @@ class MemriseImportDialog(QDialog):
 	
 							if scheduleInfo.ignored:
 								mw.col.sched.suspendCards([card.id for card in cards])
-	
+
 					self.progressBar.setValue(self.progressBar.value()+1)
 					QApplication.processEvents()
 		
@@ -783,6 +838,7 @@ class MemriseImportDialog(QDialog):
 		courseUrl = self.courseUrlLineEdit.text()
 		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
 		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
+		self.loader.downloadMems = self.importMemsCheckBox.isChecked() and self.downloadMediaCheckBox.isChecked()
 		self.loader.start(courseUrl)
 
 def startCourseImporter():

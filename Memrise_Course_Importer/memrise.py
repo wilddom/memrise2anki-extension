@@ -56,7 +56,7 @@ class Schedule(object):
     def get(self, direction, thing):
         return self.directionThing.get(direction, {}).get(thing.id)
     
-    def getScheduleInfosForThing(self, thing):
+    def getScheduleInfos(self, thing):
         return self.thingDirection.get(thing.id, {})
     
     def getDirections(self):
@@ -73,6 +73,47 @@ class ScheduleInfo(object):
         self.incorrect = 0
         self.streak = 0
         self.due = datetime.date.today()
+
+class MemCollection(object):
+    def __init__(self):
+        self.directionThing = {}
+        self.thingDirection = {}
+        
+    def add(self, mem):
+        self.directionThing.setdefault(mem.direction, {})[mem.thingId] = mem
+        self.thingDirection.setdefault(mem.thingId, {})[mem.direction] = mem
+        
+    def get(self, direction, thing):
+        return self.directionThing.get(direction, {}).get(thing.id)
+
+    def getMems(self, thing):
+        return self.thingDirection.get(thing.id, {})
+    
+    def getDirections(self):
+        return self.directionThing.keys()
+    
+    def countDirections(self):
+        return len(self.directionThing.keys())
+
+class Mem(object):
+    def __init__(self, memId=None):
+        self.id = memId
+        self.direction = Direction()
+        self.thingId = None
+        self.text = ""
+        self.remoteImageUrl = ""
+        self.localImageUrl = ""
+    
+    def get(self):
+        if self.isTextMem():
+            return self.text
+        return self.localImageUrl
+    
+    def isTextMem(self):
+        return not self.isImageMem()
+    
+    def isImageMem(self):
+        return len(self.remoteImageUrl) > 0
 
 class Level(object):
     def __init__(self, levelId):
@@ -107,6 +148,7 @@ class Field(object):
     Text = 'text'
     Audio = 'audio'
     Image = 'image'
+    Mem = 'mem'
     
     def __init__(self, fieldType, name, index):
         self.type = fieldType
@@ -142,6 +184,7 @@ class Pool(object):
         self.uniquifyName = NameUniquifier()
         
         self.schedule = Schedule()
+        self.mems = MemCollection()
 
     def addColumn(self, colType, name, index):
         if not colType in Column.Types:
@@ -495,6 +538,16 @@ class CourseLoader(object):
         scheduleInfo.due = utcToLocal(datetime.datetime.strptime(data['next_date'], "%Y-%m-%dT%H:%M:%S"))
         return scheduleInfo
     
+    @staticmethod
+    def loadMem(data, pool, fixUrl=lambda url: url):
+        mem = Mem(data['id'])
+        mem.thingId = data['thing_id']
+        mem.direction.front = pool.getColumnName(data["column_b"])
+        mem.direction.back = pool.getColumnName(data["column_a"])
+        mem.text = data['text']
+        mem.remoteImageUrl = fixUrl(data['image_output_url'])
+        return mem
+    
     def loadLevel(self, course, levelIndex):
         levelData = self.service.loadLevelData(course.id, levelIndex)
         
@@ -519,6 +572,10 @@ class CourseLoader(object):
 
         for userData in levelData["thingusers"]:
             level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
+
+        for _, memData in levelData["mems"].items():
+            for _, memRowData in memData.items():
+                level.pool.mems.add(self.loadMem(memRowData, level.pool, self.service.toAbsoluteMediaUrl))
 
         thingLoader = ThingLoader(level.pool)
         for _, thingRowData in levelData["things"].items():
@@ -606,6 +663,8 @@ class Service(object):
     
     @staticmethod
     def toAbsoluteMediaUrl(url):
+        if not url:
+            return url
         return urlparse.urljoin(u"http://static.memrise.com/", url)
     
     def downloadMedia(self, url, skipExisting=False):
