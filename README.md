@@ -45,6 +45,13 @@ Progress (intervals, due dates, etc.) from Memrise can be imported. But be cauti
 case you want to update an already downloaded deck. If the templates have been renamed manually, a dialog will help you to
 assign the existing template to a testing direction.
 
+Mems
+----
+
+The import of your mems from Memrise is possible. A mem is assigned to a testing direction (front->back), therefore a field needs
+to be created for each direction. As Anki does not officially support embedded media (youtube, etc.) a link will be placed instead.
+
+
 Bug Reports
 -----------
 
@@ -54,7 +61,7 @@ Fair use
 --------
 
 Good wordlists don't come for free, they are the result of a lot of work. Respect the rights of the authors and their hard work.
-And please support the guys at Memrise by subscribing to premium.
+And please support the guys at Memrise by subscribing to [premium](https://www.memrise.com/premium/).
 
 
 Credits
