@@ -50,8 +50,9 @@ class MemriseCourseLoader(QObject):
 		def downloadMems(self, thing):
 			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for mem in thing.pool.mems.getMems(thing).values():
-				if mem.isImageMem():
-					mem.localImageUrl = download(mem.remoteImageUrl)
+				mem.localImageUrls = filter(bool, map(download, mem.remoteImageUrls))
+				for remote, local in zip(mem.remoteImageUrls, mem.localImageUrls):
+					mem.text = mem.text.replace(remote, local)
 			
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
@@ -659,8 +660,6 @@ class MemriseImportDialog(QDialog):
 		
 	@staticmethod
 	def prepareText(content):
-		content = re.sub(r"(\*\*|__)(.+?)(\*\*|__)", '<strong>\\2</strong>', content)
-		content = re.sub(r"(\*|_)(.+?)(\*|_)", '<em>\\2</em>', content)
 		return u'{:s}'.format(content.strip())
 	
 	@staticmethod
@@ -717,10 +716,7 @@ class MemriseImportDialog(QDialog):
 		elif spec.field.type == memrise.Field.Audio:
 			return map(self.prepareAudio, values)
 		elif spec.field.type == memrise.Field.Mem:
-			if values.isTextMem():
-				return self.prepareText(values.get())
-			if values.isImageMem():
-				return self.prepareImage(values.get())
+			return self.prepareText(values.get())
 						
 		return None
 	

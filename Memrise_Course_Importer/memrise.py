@@ -1,6 +1,6 @@
 import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, datetime, calendar
 import BeautifulSoup
-import uuid
+import uuid, markdown
 
 def utcToLocal(utcDt):
     # get integer timestamp to avoid precision lost
@@ -103,20 +103,12 @@ class Mem(object):
         self.id = memId
         self.direction = Direction()
         self.thingId = None
-        self.markdown = ""
-        self.remoteImageUrl = ""
-        self.localImageUrl = ""
+        self.text = ""
+        self.remoteImageUrls = []
+        self.localImageUrls = []
     
     def get(self):
-        if self.isTextMem():
-            return self.markdown
-        return self.localImageUrl
-    
-    def isTextMem(self):
-        return not self.isImageMem()
-    
-    def isImageMem(self):
-        return len(self.remoteImageUrl) > 0
+        return self.text
 
 class Level(object):
     def __init__(self, levelId):
@@ -547,8 +539,11 @@ class CourseLoader(object):
         mem.thingId = data['thing_id']
         mem.direction.front = pool.getColumnName(data["column_b"])
         mem.direction.back = pool.getColumnName(data["column_a"])
-        mem.markdown = memData['text']
-        mem.remoteImageUrl = fixUrl(memData['image_output_url'])
+        text = memData['text']
+        if memData['image_output_url']:
+            text = "img:{}".format(memData['image_output_url'])
+        mem.text, remoteImageUrls = markdown.convertAndReturnImages(text)
+        mem.remoteImageUrls.extend(map(fixUrl, remoteImageUrls))
         return mem
     
     def loadLevel(self, course, levelIndex):
