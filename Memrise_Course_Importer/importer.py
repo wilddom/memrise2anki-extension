@@ -659,8 +659,8 @@ class MemriseImportDialog(QDialog):
 		
 	@staticmethod
 	def prepareText(content):
-		content = re.sub(r"\*([^\*]+)\*", '<strong>\\1</strong>', content)
-		content = re.sub(r"_([^_]+)_", '<em>\\1</em>', content)
+		content = re.sub(r"(\*\*|__)(.+?)(\*\*|__)", '<strong>\\2</strong>', content)
+		content = re.sub(r"(\*|_)(.+?)(\*|_)", '<em>\\2</em>', content)
 		return u'{:s}'.format(content.strip())
 	
 	@staticmethod

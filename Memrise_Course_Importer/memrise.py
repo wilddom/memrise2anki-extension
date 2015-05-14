@@ -1,6 +1,6 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, itertools, datetime, calendar
-import uuid
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, datetime, calendar
 import BeautifulSoup
+import uuid
 
 def utcToLocal(utcDt):
     # get integer timestamp to avoid precision lost
@@ -103,13 +103,13 @@ class Mem(object):
         self.id = memId
         self.direction = Direction()
         self.thingId = None
-        self.text = ""
+        self.markdown = ""
         self.remoteImageUrl = ""
         self.localImageUrl = ""
     
     def get(self):
         if self.isTextMem():
-            return self.text
+            return self.markdown
         return self.localImageUrl
     
     def isTextMem(self):
@@ -527,13 +527,11 @@ class CourseLoader(object):
         return pool
     
     @staticmethod
-    def loadScheduleInfo(data, pool, levelDirection):
+    def loadScheduleInfo(data, pool):
         scheduleInfo = ScheduleInfo()
         scheduleInfo.thingId = data['thing_id']
         scheduleInfo.direction.front = pool.getColumnName(data["column_b"])
         scheduleInfo.direction.back = pool.getColumnName(data["column_a"])
-        if not scheduleInfo.direction.isValid():
-            scheduleInfo.direction = levelDirection
         scheduleInfo.ignored = data['ignored']
         scheduleInfo.interval = data['interval']
         scheduleInfo.correct = data['total_correct']
@@ -544,15 +542,13 @@ class CourseLoader(object):
         return scheduleInfo
     
     @staticmethod
-    def loadMem(data, pool, levelDirection, fixUrl=lambda url: url):
-        mem = Mem(data['id'])
+    def loadMem(data, memData, pool, fixUrl=lambda url: url):
+        mem = Mem(memData['id'])
         mem.thingId = data['thing_id']
         mem.direction.front = pool.getColumnName(data["column_b"])
         mem.direction.back = pool.getColumnName(data["column_a"])
-        if not mem.direction.isValid():
-            mem.direction = levelDirection
-        mem.text = data['text']
-        mem.remoteImageUrl = fixUrl(data['image_output_url'])
+        mem.markdown = memData['text']
+        mem.remoteImageUrl = fixUrl(memData['image_output_url'])
         return mem
     
     def loadLevel(self, course, levelIndex):
@@ -578,11 +574,10 @@ class CourseLoader(object):
         course.directions.add(level.direction)
 
         for userData in levelData["thingusers"]:
-            level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool, level.direction))
-
-        for _, memData in levelData["mems"].items():
-            for _, memRowData in memData.items():
-                level.pool.mems.add(self.loadMem(memRowData, level.pool, level.direction, self.service.toAbsoluteMediaUrl))
+            level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
+            memData = levelData["mems"].get(unicode(userData["thing_id"]),{}).get(unicode(userData["mem_id"]))
+            if memData:
+                level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
 
         thingLoader = ThingLoader(level.pool)
         for _, thingRowData in levelData["things"].items():
