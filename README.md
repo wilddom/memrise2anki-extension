@@ -50,10 +50,15 @@ Bug Reports
 
 Please report bugs with the [github issue tracker](https://github.com/wilddom/memrise2anki-extension/issues).
 
+Fair use
+--------
+
+Good wordlists don't come for free, they are the result of a lot of work. Respect the rights of the authors and their hard work.
+And please support the guys at Memrise by subscribing to premium.
+
+
 Credits
 -------
 
 This is more or less a complete rewrite of Pete Schlette's original addon (https://github.com/pschlette/memrise2anki-extension).
 Thanks to Slava Shklyaev (https://github.com/slava-sh) for the first version of the interval import.
-
-
