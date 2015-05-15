@@ -10,6 +10,14 @@ class MemriseRenderer(mistune.Renderer):
         if not self.capture_images is None:
             self.capture_images.append(src)
         return super(MemriseRenderer, self).image(src, *args, **kwargs)
+    
+    def embed(self, link, title, text):
+        if link.startswith('javascript:'):
+            link = ''
+        if not title:
+            return '<a href="%s" class="embed">%s</a>' % (link, text)
+        title = mistune.escape(title, quote=True)
+        return '<a href="%s" title="%s" class="embed">%s</a>' % (link, title, text)
 
 class MemriseInlineGrammar(mistune.InlineGrammar):
     memrise_image = re.compile(r'^img:([^\s]+)')
@@ -33,15 +41,15 @@ class MemriseInlineLexer(mistune.InlineLexer):
     
     def output_memrise_embed(self, m):
         href = m.group(1)
-        return self.renderer.link(href, "", href)
+        return self.renderer.embed(href, "", href)
 
 def Markdown(image_urls=None, **kwargs):
     return mistune.Markdown(renderer=MemriseRenderer(capture_images=image_urls), inline=MemriseInlineLexer, **kwargs)
     
-def convert(text, image_urls=None, **kwargs):
-    return Markdown(image_urls, **kwargs)(text)
+def convert(text, image_urls=None, use_xhtml=True, **kwargs):
+    return Markdown(image_urls, use_xhtml=use_xhtml, **kwargs)(text)
     
 def convertAndReturnImages(text, **kwargs):
     image_urls = []
-    output = Markdown(image_urls, **kwargs)(text)
+    output = convert(text, image_urls=image_urls, **kwargs)
     return output, image_urls

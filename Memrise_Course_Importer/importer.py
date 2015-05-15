@@ -1,10 +1,12 @@
 ﻿# -*- coding: utf-8 -*-
 
 import memrise, cookielib, os.path, uuid, sys, datetime, re
+import BeautifulSoup
 from anki.media import MediaManager
 from aqt import mw
 from aqt.qt import *
 from functools import partial
+import oembed
 
 def camelize(content):
 	return u''.join(x for x in content.title() if x.isalpha())
@@ -53,6 +55,14 @@ class MemriseCourseLoader(QObject):
 				mem.localImageUrls = filter(bool, map(download, mem.remoteImageUrls))
 				for remote, local in zip(mem.remoteImageUrls, mem.localImageUrls):
 					mem.text = mem.text.replace(remote, local)
+				
+				if self.sender.embedMemsOnlineMedia:
+					soup = BeautifulSoup.BeautifulSoup(mem.text)
+					for link in soup.findAll("a", {"class": "embed"}):
+						embedCode = oembed.loadEmbedCode(link.get("href"))
+						if embedCode:
+							link.replaceWith(BeautifulSoup.BeautifulSoup(embedCode))
+							mem.text = unicode(soup)
 			
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
@@ -90,6 +100,7 @@ class MemriseCourseLoader(QObject):
 		self.downloadMedia = True
 		self.skipExistingMedia = True
 		self.downloadMems = True
+		self.embedMemsOnlineMedia = False
 	
 	def load(self, url):
 		self.url = url
@@ -596,10 +607,18 @@ class MemriseImportDialog(QDialog):
 		self.deckSelection.currentIndexChanged.connect(partial(setScheduler,self.importScheduleCheckBox,lambda i: i==0))
 
 		self.importMemsCheckBox = QCheckBox("Import mems")
-		self.importMemsCheckBox.setChecked(True)
 		importMemsTooltip = "activate \"Download media files\" in order to download image mems"
 		self.importMemsCheckBox.setToolTip(importMemsTooltip)
 		layout.addWidget(self.importMemsCheckBox)
+		
+		self.embedMemsOnlineMediaCheckBox = QCheckBox("Embed online media in mems (experimental)")
+		embedMemsOnlineMediaTooltip = "Warning: Embedding online media is not officially supported by Anki,\n it may or may not work depending on your platform."
+		self.embedMemsOnlineMediaCheckBox.setToolTip(embedMemsOnlineMediaTooltip)
+		layout.addWidget(self.embedMemsOnlineMediaCheckBox)
+
+		self.importMemsCheckBox.stateChanged.connect(self.embedMemsOnlineMediaCheckBox.setEnabled)
+		self.importMemsCheckBox.setChecked(True)
+		self.embedMemsOnlineMediaCheckBox.setChecked(False)
 
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
@@ -835,6 +854,7 @@ class MemriseImportDialog(QDialog):
 		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
 		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
 		self.loader.downloadMems = self.importMemsCheckBox.isChecked() and self.downloadMediaCheckBox.isChecked()
+		self.loader.embedMemsOnlineMedia = self.importMemsCheckBox.isChecked() and self.embedMemsOnlineMediaCheckBox.isChecked()
 		self.loader.start(courseUrl)
 
 def startCourseImporter():

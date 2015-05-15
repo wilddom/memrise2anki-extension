@@ -48,8 +48,10 @@ assign the existing template to a testing direction.
 Mems
 ----
 
-The import of your mems from Memrise is possible. A mem is assigned to a testing direction (front->back), therefore a field needs
-to be created for each direction. As Anki does not officially support embedded media (youtube, etc.) a link will be placed instead.
+The import of your mems from Memrise is possible. A mem is assigned to a testing direction (front to back), therefore a field needs
+to be created for each direction. As Anki does not officially support embedded media (youtube, etc.) the option to embed online media
+is experimental, embedded media may or may not work depending on your platform. If the option is disabled (default), a link will
+be shown instead.
 
 
 Bug Reports
