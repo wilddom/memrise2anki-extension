@@ -20,8 +20,8 @@ class MemriseRenderer(mistune.Renderer):
         return '<a href="%s" title="%s" class="embed">%s</a>' % (link, title, text)
 
 class MemriseInlineGrammar(mistune.InlineGrammar):
-    memrise_image = re.compile(r'^img:([^\s]+)')
-    memrise_embed = re.compile(r'^embed:([^\s]+)')
+    memrise_image = re.compile(r'^img:(([\s]+(https?:\/\/[^\s]+))|([^\s]+))')
+    memrise_embed = re.compile(r'^embed:[\s]*(https?:\/\/[^\s]+)')
     text = re.compile(r'^[\s\S]+?(?=[\\<!\[_*`~]|https?://|img:|embed:| {2,}\n|$)')
     
 class MemriseInlineLexer(mistune.InlineLexer):
@@ -36,7 +36,7 @@ class MemriseInlineLexer(mistune.InlineLexer):
         super(MemriseInlineLexer, self).__init__(renderer, rules, **kwargs)
         
     def output_memrise_image(self, m):
-        src = m.group(1)
+        src = m.group(4) if m.group(4) else m.group(3)
         return self.renderer.image(src, "", "")
     
     def output_memrise_embed(self, m):
