@@ -544,6 +544,9 @@ class CourseLoader(object):
             text = "img:{}".format(memData['image_output_url'])
         mem.text, remoteImageUrls = markdown.convertAndReturnImages(text)
         mem.remoteImageUrls.extend(map(fixUrl, remoteImageUrls))
+        for before, after in zip(remoteImageUrls, mem.remoteImageUrls):
+            if after != before:
+                mem.text = mem.text.replace(before, after)
         return mem
     
     def loadLevel(self, course, levelIndex):
