@@ -11,7 +11,7 @@
 import re
 import inspect
 
-__version__ = '0.5.1'
+__version__ = '0.6'
 __author__ = 'Hsiaoming Yang <me@lepture.com>'
 __all__ = [
     'BlockGrammar', 'BlockLexer',
@@ -21,6 +21,17 @@ __all__ = [
 ]
 
 
+_key_pattern = re.compile(r'\s+')
+_escape_pattern = re.compile(r'&(?!#?\w+;)')
+_newline_pattern = re.compile(r'\r\n|\r')
+_inline_tag = (
+    r'a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|'
+    r'var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|'
+    r'span|br|wbr|ins|del|img|font'
+)
+_block_tag = r'(?!(?:%s)\b)\w+(?!:/|[^\w\s@]*@)\b' % _inline_tag
+
+
 def _pure_pattern(regex):
     pattern = regex.pattern
     if pattern.startswith('^'):
@@ -28,14 +39,8 @@ def _pure_pattern(regex):
     return pattern
 
 
-_key_pattern = re.compile(r'\s+')
-
-
 def _keyify(key):
     return _key_pattern.sub(' ', key.lower())
-
-
-_escape_pattern = re.compile(r'&(?!#?\w+;)')
 
 
 def escape(text, quote=False, smart_amp=True):
@@ -60,20 +65,12 @@ def escape(text, quote=False, smart_amp=True):
 
 
 def preprocessing(text, tab=4):
-    text = re.sub(r'\r\n|\r', '\n', text)
+    text = _newline_pattern.sub('\n', text)
     text = text.replace('\t', ' ' * tab)
     text = text.replace('\u00a0', ' ')
     text = text.replace('\u2424', '\n')
     pattern = re.compile(r'^ +$', re.M)
     return pattern.sub('', text)
-
-
-_tag = (
-    r'(?!(?:'
-    r'a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|'
-    r'var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|'
-    r'span|br|wbr|ins|del|img)\b)\w+(?!:/|[^\w\s@]*@)\b'
-)
 
 
 class BlockGrammar(object):
@@ -135,14 +132,14 @@ class BlockGrammar(object):
             _pure_pattern(block_quote),
             _pure_pattern(def_links),
             _pure_pattern(def_footnotes),
-            '<' + _tag,
+            '<' + _block_tag,
         )
     )
     block_html = re.compile(
         r'^ *(?:%s|%s|%s) *(?:\n{2,}|\s*$)' % (
             r'<!--[\s\S]*?-->',
-            r'<(%s)[\s\S]+?<\/\1>' % _tag,
-            r'''<%s(?:"[^"]*"|'[^']*'|[^'">])*?>''' % _tag,
+            r'<(%s)[\s\S]+?<\/\1>' % _block_tag,
+            r'''<%s(?:"[^"]*"|'[^']*'|[^'">])*?>''' % _block_tag,
         )
     )
     table = re.compile(
@@ -203,14 +200,14 @@ class BlockLexer(object):
                     continue
                 getattr(self, 'parse_%s' % key)(m)
                 return m
-            return False
+            return False  # pragma: no cover
 
         while text:
             m = manipulate(text)
             if m is not False:
                 text = text[len(m.group(0)):]
                 continue
-            if text:
+            if text:  # pragma: no cover
                 raise RuntimeError('Infinite loop at: %s' % text)
         return self.tokens
 
@@ -421,17 +418,19 @@ class InlineGrammar(object):
     """Grammars for inline level tokens."""
 
     escape = re.compile(r'^\\([\\`*{}\[\]()#+\-.!_>~|])')  # \* \+ \! ....
-    tag = re.compile(
-        r'^<!--[\s\S]*?-->|'  # comment
-        r'^<\/\w+>|'  # close tag
-        r'^<\w+[^>]*?>'  # open tag
+    inline_html = re.compile(
+        r'^(?:%s|%s|%s)' % (
+            r'<!--[\s\S]*?-->',
+            r'<(%s)[\s\S]+?<\/\1>' % _inline_tag,
+            r'''<(?:%s)(?:"[^"]*"|'[^']*'|[^'">])*?>''' % _inline_tag,
+        )
     )
-    autolink = re.compile(r'^<([^ >]+(@|:\/)[^ >]+)>')
+    autolink = re.compile(r'^<([^ >]+(@|:)[^ >]+)>')
     link = re.compile(
         r'^!?\[('
         r'(?:\[[^^\]]*\]|[^\[\]]|\](?=[^\[]*\]))*'
         r')\]\('
-        r'''\s*<?([\s\S]*?)>?(?:\s+['"]([\s\S]*?)['"])?\s*'''
+        r'''\s*(<)?([\s\S]*?)(?(2)>)(?:\s+['"]([\s\S]*?)['"])?\s*'''
         r'\)'
     )
     reflink = re.compile(
@@ -442,18 +441,18 @@ class InlineGrammar(object):
     nolink = re.compile(r'^!?\[((?:\[[^\]]*\]|[^\[\]])*)\]')
     url = re.compile(r'''^(https?:\/\/[^\s<]+[^<.,:;"')\]\s])''')
     double_emphasis = re.compile(
-        r'^_{2}(.+?)_{2}(?!_)'  # __word__
+        r'^_{2}([\s\S]+?)_{2}(?!_)'  # __word__
         r'|'
-        r'^\*{2}(.+?)\*{2}(?!\*)'  # **word**
+        r'^\*{2}([\s\S]+?)\*{2}(?!\*)'  # **word**
     )
     emphasis = re.compile(
-        r'^\b_((?:__|.)+?)_\b'  # _word_
+        r'^\b_((?:__|[\s\S])+?)_\b'  # _word_
         r'|'
-        r'^\*((?:\*\*|.)+?)\*(?!\*)'  # *word*
+        r'^\*((?:\*\*|[\s\S])+?)\*(?!\*)'  # *word*
     )
-    code = re.compile(r'^(`+)\s*(.*?[^`])\s*\1(?!`)')  # `code`
+    code = re.compile(r'^(`+)\s*([\s\S]*?[^`])\s*\1(?!`)')  # `code`
     linebreak = re.compile(r'^ {2,}\n(?!\s*$)')
-    strikethrough = re.compile(r'^~~(?=\S)(.*?\S)~~')  # ~~word~~
+    strikethrough = re.compile(r'^~~(?=\S)([\s\S]+?\S)~~')  # ~~word~~
     footnote = re.compile(r'^\[\^([^\]]+)\]')
     text = re.compile(r'^[\s\S]+?(?=[\\<!\[_*`~]|https?://| {2,}\n|$)')
 
@@ -472,9 +471,14 @@ class InlineLexer(object):
     grammar_class = InlineGrammar
 
     default_rules = [
-        'escape', 'autolink', 'url', 'tag',
+        'escape', 'inline_html', 'autolink', 'url',
         'footnote', 'link', 'reflink', 'nolink',
         'double_emphasis', 'emphasis', 'code',
+        'linebreak', 'strikethrough', 'text',
+    ]
+    inline_html_rules = [
+        'escape', 'autolink', 'url', 'link', 'reflink',
+        'nolink', 'double_emphasis', 'emphasis', 'code',
         'linebreak', 'strikethrough', 'text',
     ]
 
@@ -491,6 +495,10 @@ class InlineLexer(object):
 
         self._in_link = False
         self._in_footnote = False
+
+        kwargs.update(self.renderer.options)
+        _to_parse = kwargs.get('parse_html') or kwargs.get('parse_inline_html')
+        self._parse_inline_html = _to_parse
 
     def __call__(self, text):
         return self.output(text)
@@ -520,7 +528,7 @@ class InlineLexer(object):
                 out = getattr(self, 'output_%s' % key)(m)
                 if out is not None:
                     return m, out
-            return False
+            return False  # pragma: no cover
 
         self.line_started = False
         while text:
@@ -531,7 +539,7 @@ class InlineLexer(object):
                 output += out
                 text = text[len(m.group(0)):]
                 continue
-            if text:
+            if text:  # pragma: no cover
                 raise RuntimeError('Infinite loop at: %s' % text)
 
         return output
@@ -553,14 +561,16 @@ class InlineLexer(object):
             return self.renderer.text(link)
         return self.renderer.autolink(link, False)
 
-    def output_tag(self, m):
+    def output_inline_html(self, m):
         text = m.group(0)
-        lower_text = text.lower()
-        if lower_text.startswith('<a '):
-            self._in_link = True
-        if lower_text.startswith('</a>'):
-            self._in_link = False
-        return self.renderer.tag(text)
+        if self._parse_inline_html:
+            if m.group(1) == 'a':
+                self._in_link = True
+                text = self.output(text, rules=self.inline_html_rules)
+                self._in_link = False
+            else:
+                text = self.output(text, rules=self.inline_html_rules)
+        return self.renderer.inline_html(text)
 
     def output_footnote(self, m):
         key = _keyify(m.group(1))
@@ -573,7 +583,7 @@ class InlineLexer(object):
         return self.renderer.footnote_ref(key, self.footnote_index)
 
     def output_link(self, m):
-        return self._process_link(m, m.group(2), m.group(3))
+        return self._process_link(m, m.group(3), m.group(4))
 
     def output_reflink(self, m):
         key = _keyify(m.group(2) or m.group(1))
@@ -835,13 +845,11 @@ class Renderer(object):
             return '%s />' % html
         return '%s>' % html
 
-    def tag(self, html):
-        """Rendering span level html tag.
+    def inline_html(self, html):
+        """Rendering span level pure html content.
 
-        :param html: html tag snippet.
+        :param html: text content of the html snippet.
         """
-        if self.options.get('skip_html'):
-            return ''
         if self.options.get('escape'):
             return escape(html)
         return html
@@ -918,6 +926,10 @@ class Markdown(object):
         self.footnotes = []
         self.tokens = []
 
+        # detect if it should parse text in block html
+        _to_parse = kwargs.get('parse_html') or kwargs.get('parse_block_html')
+        self._parse_block_html = _to_parse
+
     def __call__(self, text):
         return self.parse(text)
 
@@ -968,7 +980,7 @@ class Markdown(object):
     def peek(self):
         if self.tokens:
             return self.tokens[-1]
-        return None
+        return None  # pragma: no cover
 
     def output(self, text, rules=None):
         self.tokens = self.block(text, rules)
@@ -1081,7 +1093,7 @@ class Markdown(object):
 
     def output_block_html(self):
         text = self.token['text']
-        if self.options.get('parse_html') and not self.token.get('pre'):
+        if self._parse_block_html and not self.token.get('pre'):
             text = self.inline(text)
         return self.renderer.block_html(text)
 
@@ -1092,11 +1104,15 @@ class Markdown(object):
         return self.renderer.paragraph(self.tok_text())
 
 
-def markdown(text, **kwargs):
+def markdown(text, escape=True, **kwargs):
     """Render markdown formatted text to html.
 
     :param text: markdown formatted text content.
-    :param escape: if set to True, all html tags will be escaped.
+    :param escape: if set to False, all html tags will not be escaped.
     :param use_xhtml: output with xhtml tags.
+    :param hard_wrap: if set to True, it will has GFM line breaks feature.
+    :param parse_html: parse text in block and inline level html.
+    :param parse_block_html: parse text only in block level html.
+    :param parse_inline_html: parse text only in inline level html.
     """
-    return Markdown(**kwargs)(text)
+    return Markdown(escape=escape, **kwargs)(text)
