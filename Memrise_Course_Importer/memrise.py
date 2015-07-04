@@ -178,8 +178,18 @@ class Pool(object):
         
         self.uniquifyName = NameUniquifier()
         
+        self.things = {}
         self.schedule = Schedule()
         self.mems = MemCollection()
+
+    def addThing(self, thing):
+        self.things[thing.id] = thing
+        
+    def getThing(self, thingId):
+        self.things.get(thingId, None)
+
+    def hasThing(self, thingId):
+        return thingId in self.things
 
     def addColumn(self, colType, name, index):
         if not colType in Column.Types:
@@ -391,6 +401,9 @@ class ThingLoader(object):
         self.pool = pool
     
     def loadThing(self, row, fixUrl=lambda url: url):
+        if self.pool.hasThing(row['id']):
+            return self.pool.getThing(row['id'])
+        
         thing = Thing(row['id'])
         thing.pool = self.pool
         
