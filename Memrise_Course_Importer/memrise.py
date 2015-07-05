@@ -306,8 +306,24 @@ class TextColumnData(object):
 
 class MediaColumnData(object):
     def __init__(self):
-        self.remoteUrls = []
-        self.localUrls = []
+        self.urls = collections.OrderedDict()
+    
+    def getRemoteUrls(self):
+        return self.urls.keys()
+    def getLocalUrls(self):
+        return self.urls.values()
+    
+    def setRemoteUrls(self, values):
+        self.urls.update(map(lambda v: (v, None), values))
+    def setLocalUrls(self, values):
+        for new, key in zip(values, self.urls.keys()):
+            self.urls[key] = new
+            
+    def setLocalUrl(self, remote, local):
+        self.urls[remote] = local
+
+    def allDownloaded(self):
+        return all(self.urls.values())
 
 class AttributeData(object):
     def __init__(self):
@@ -379,22 +395,22 @@ class Thing(object):
         return self.getAttributeData(nameOrIndex).values
 
     def getAudioUrls(self, nameOrIndex):
-        return self.getAudioColumnData(nameOrIndex).remoteUrls
+        return self.getAudioColumnData(nameOrIndex).getRemoteUrls()
 
     def getImageUrls(self, nameOrIndex):
-        return self.getImageColumnData(nameOrIndex).remoteUrls
+        return self.getImageColumnData(nameOrIndex).getRemoteUrls()
 
     def setLocalAudioUrls(self, nameOrIndex, urls):
-        self.getAudioColumnData(nameOrIndex).localUrls = urls
+        self.getAudioColumnData(nameOrIndex).setLocalUrls(urls)
     
     def getLocalAudioUrls(self, nameOrIndex):
-        return self.getAudioColumnData(nameOrIndex).localUrls
+        return self.getAudioColumnData(nameOrIndex).getLocalUrls()
 
     def setLocalImageUrls(self, nameOrIndex, urls):
-        self.getImageColumnData(nameOrIndex).localUrls = urls
+        self.getImageColumnData(nameOrIndex).setLocalUrls(urls)
 
     def getLocalImageUrls(self, nameOrIndex):
-        return self.getImageColumnData(nameOrIndex).localUrls
+        return self.getImageColumnData(nameOrIndex).getLocalUrls()
 
 class ThingLoader(object):
     def __init__(self, pool):
@@ -419,13 +435,13 @@ class ThingLoader(object):
         for column in self.pool.getAudioColumns():
             cell = row['columns'][unicode(column.index)]
             data = MediaColumnData()
-            data.remoteUrls = map(fixUrl, self.__getUrls(cell))
+            data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
             thing.setAudioColumnData(column.name, data)
             
         for column in self.pool.getImageColumns():
             cell = row['columns'][unicode(column.index)]
             data = MediaColumnData()
-            data.remoteUrls = map(fixUrl, self.__getUrls(cell))
+            data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
             thing.setImageColumnData(column.name, data)
 
         for attribute in self.pool.getAttributes():
@@ -694,13 +710,7 @@ class Service(object):
         if skipExisting and os.path.isfile(fullMediaPath):
             return localName
         
-        try:
-            with open(fullMediaPath, "wb") as mediaFile:
-                mediaFile.write(self.downloadWithRetry(url, 3).read())
-        except urllib2.HTTPError as e:
-            if e.code == 403:
-                return False
-            else:
-                raise e
+        with open(fullMediaPath, "wb") as mediaFile:
+            mediaFile.write(self.downloadWithRetry(url, 3).read())
 
         return localName

@@ -43,17 +43,15 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 			
 		def downloadMedia(self, thing):
-			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for colName in thing.pool.getImageColumnNames():
-				thing.setLocalImageUrls(colName, filter(bool, map(download, thing.getImageUrls(colName))))
+				thing.setLocalImageUrls(colName, map(self.sender.download, thing.getImageUrls(colName)))
 			for colName in thing.pool.getAudioColumnNames():
-				thing.setLocalAudioUrls(colName, filter(bool, map(download, thing.getAudioUrls(colName))))
+				thing.setLocalAudioUrls(colName, map(self.sender.download, thing.getAudioUrls(colName)))
 		
 		def downloadMems(self, thing):
-			download = partial(self.sender.memriseService.downloadMedia, skipExisting=self.sender.skipExistingMedia)
 			for mem in thing.pool.mems.getMems(thing).values():
-				mem.localImageUrls = filter(bool, map(download, mem.remoteImageUrls))
-				for remote, local in zip(mem.remoteImageUrls, mem.localImageUrls):
+				mem.localImageUrls = map(self.sender.download, mem.remoteImageUrls)
+				for remote, local in filter(lambda a,b: bool(b), zip(mem.remoteImageUrls, mem.localImageUrls)):
 					mem.text = mem.text.replace(remote, local)
 				
 				if self.sender.embedMemsOnlineMedia:
@@ -101,6 +99,12 @@ class MemriseCourseLoader(QObject):
 		self.skipExistingMedia = True
 		self.downloadMems = True
 		self.embedMemsOnlineMedia = False
+	
+	def download(self, url):
+		try:
+			return self.memriseService.downloadMedia(url, skipExisting=self.skipExistingMedia)
+		except:
+			return None
 	
 	def load(self, url):
 		self.url = url
@@ -731,9 +735,9 @@ class MemriseImportDialog(QDialog):
 		if spec.field.type == memrise.Field.Text:
 			return map(self.prepareText, values)
 		elif spec.field.type == memrise.Field.Image:
-			return map(self.prepareImage, values)
+			return map(self.prepareImage, filter(bool, values))
 		elif spec.field.type == memrise.Field.Audio:
-			return map(self.prepareAudio, values)
+			return map(self.prepareAudio, filter(bool, values))
 		elif spec.field.type == memrise.Field.Mem:
 			return self.prepareText(values.get())
 						
