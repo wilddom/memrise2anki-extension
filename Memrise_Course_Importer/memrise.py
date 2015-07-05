@@ -104,8 +104,7 @@ class Mem(object):
         self.direction = Direction()
         self.thingId = None
         self.text = ""
-        self.remoteImageUrls = []
-        self.localImageUrls = []
+        self.images = []
     
     def get(self):
         return self.text
@@ -304,26 +303,39 @@ class TextColumnData(object):
         self.hiddenAlternatives = []
         self.typingCorrects = []
 
+class DownloadableImage(object):
+    def __init__(self, remoteUrl=None):
+        self.remoteUrl = remoteUrl
+        self.localUrl = None
+        
+    def isDownloaded(self):
+        return bool(self.localUrl)
+
 class MediaColumnData(object):
-    def __init__(self):
-        self.urls = collections.OrderedDict()
+    def __init__(self, images=[]):
+        self.images = images
+    
+    def getImages(self):
+        return self.images
+    
+    def setImages(self, images):
+        self.images = images
     
     def getRemoteUrls(self):
-        return self.urls.keys()
-    def getLocalUrls(self):
-        return self.urls.values()
+        return map(lambda im: im.remoteUrl, self.images)
     
-    def setRemoteUrls(self, values):
-        self.urls.update(map(lambda v: (v, None), values))
-    def setLocalUrls(self, values):
-        for new, key in zip(values, self.urls.keys()):
-            self.urls[key] = new
-            
-    def setLocalUrl(self, remote, local):
-        self.urls[remote] = local
+    def getLocalUrls(self):
+        return map(lambda im: im.localUrl, self.images)
+    
+    def setRemoteUrls(self, urls):
+        self.images = map(DownloadableImage, urls)
+
+    def setLocalUrls(self, urls):
+        for url, image in zip(urls, self.images):
+            image.localUrl = url
 
     def allDownloaded(self):
-        return all(self.urls.values())
+        return all(map(lambda im: im.isDownloaded(), self.images))
 
 class AttributeData(object):
     def __init__(self):
@@ -572,8 +584,8 @@ class CourseLoader(object):
         if memData['image_output_url']:
             text = "img:{}".format(memData['image_output_url'])
         mem.text, remoteImageUrls = markdown.convertAndReturnImages(text)
-        mem.remoteImageUrls.extend(map(fixUrl, remoteImageUrls))
-        for before, after in zip(remoteImageUrls, mem.remoteImageUrls):
+        mem.images.extend(map(DownloadableImage, map(fixUrl, remoteImageUrls)))
+        for before, after in zip(remoteImageUrls, map(lambda im: im.remoteUrl, mem.images)):
             if after != before:
                 mem.text = mem.text.replace(before, after)
         return mem

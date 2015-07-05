@@ -50,9 +50,10 @@ class MemriseCourseLoader(QObject):
 		
 		def downloadMems(self, thing):
 			for mem in thing.pool.mems.getMems(thing).values():
-				mem.localImageUrls = map(self.sender.download, mem.remoteImageUrls)
-				for remote, local in filter(lambda a,b: bool(b), zip(mem.remoteImageUrls, mem.localImageUrls)):
-					mem.text = mem.text.replace(remote, local)
+				for image in mem.images:
+					image.localUrl = self.sender.download(image.remoteUrl)
+					if image.isDownloaded():
+						mem.text = mem.text.replace(image.remoteUrl, image.localUrl)
 				
 				if self.sender.embedMemsOnlineMedia:
 					soup = BeautifulSoup.BeautifulSoup(mem.text)
