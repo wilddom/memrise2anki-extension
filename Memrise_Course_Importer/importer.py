@@ -100,12 +100,22 @@ class MemriseCourseLoader(QObject):
 		self.skipExistingMedia = True
 		self.downloadMems = True
 		self.embedMemsOnlineMedia = False
+		self.askerFunction = None
 	
 	def download(self, url):
-		try:
-			return self.memriseService.downloadMedia(url, skipExisting=self.skipExistingMedia)
-		except:
-			return None
+		import urllib2
+		while True:
+			try:
+				return self.memriseService.downloadMedia(url, skipExisting=self.skipExistingMedia)
+			except urllib2.HTTPError as e:
+				if callable(self.askerFunction) and hasattr(self.askerFunction, '__self__'):
+					action = QMetaObject.invokeMethod(self.askerFunction.__self__, self.askerFunction.__name__, Qt.BlockingQueuedConnection, Q_RETURN_ARG(str), Q_ARG(str, url), Q_ARG(str, str(e)), Q_ARG(str, url))
+					if action == "ignore":
+						return None
+					elif action == "abort":
+						raise e
+				else:
+					raise e
 	
 	def load(self, url):
 		self.url = url
@@ -134,6 +144,34 @@ class MemriseCourseLoader(QObject):
 		except Exception:
 			self.exc_info = sys.exc_info()
 		self.finished.emit()
+
+class DownloadFailedBox(QMessageBox):
+	def __init__(self):
+		super(DownloadFailedBox, self).__init__()
+		
+		self.setWindowTitle("Download failed")
+		self.setIcon(QMessageBox.Warning)
+		
+		self.addButton(QMessageBox.Retry)
+		self.addButton(QMessageBox.Ignore)
+		self.addButton(QMessageBox.Abort)
+		
+		self.setEscapeButton(QMessageBox.Ignore)
+		self.setDefaultButton(QMessageBox.Retry)
+	
+	@pyqtSlot(str, str, str, result=str)
+	def askRetry(self, url, message, info):
+		self.setText(message)
+		self.setInformativeText(url)
+		self.setDetailedText(info)
+		ret = self.exec_()
+		if ret == QMessageBox.Retry:
+			return "retry"
+		elif ret == QMessageBox.Ignore:
+			return "ignore"
+		elif ret == QMessageBox.Abort:
+			return "abort"
+		return "abort"
 
 class MemriseLoginDialog(QDialog):
 	def __init__(self, memriseService):
@@ -655,11 +693,12 @@ class MemriseImportDialog(QDialog):
 		def setTotalCount(progressBar, totalCount):
 			progressBar.setRange(0, totalCount)
 			progressBar.setFormat("Downloading: %p% (%v/%m)")
-		
+
 		self.loader = MemriseCourseLoader(memriseService)
 		self.loader.thingCountChanged.connect(partial(setTotalCount, self.progressBar))
 		self.loader.thingsLoadedChanged.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
+		self.loader.askerFunction = DownloadFailedBox().askRetry
 		
 		self.modelMapper = ModelMappingDialog(mw.col)
 		self.fieldMapper = FieldMappingDialog(mw.col)
