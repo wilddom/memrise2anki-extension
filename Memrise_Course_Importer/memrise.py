@@ -303,7 +303,7 @@ class TextColumnData(object):
         self.hiddenAlternatives = []
         self.typingCorrects = []
 
-class DownloadableImage(object):
+class DownloadableFile(object):
     def __init__(self, remoteUrl=None):
         self.remoteUrl = remoteUrl
         self.localUrl = None
@@ -312,30 +312,30 @@ class DownloadableImage(object):
         return bool(self.localUrl)
 
 class MediaColumnData(object):
-    def __init__(self, images=[]):
-        self.images = images
+    def __init__(self, files=[]):
+        self.files = files
     
-    def getImages(self):
-        return self.images
+    def getFiles(self):
+        return self.files
     
-    def setImages(self, images):
-        self.images = images
+    def setFile(self, files):
+        self.files = files
     
     def getRemoteUrls(self):
-        return map(lambda im: im.remoteUrl, self.images)
+        return map(lambda f: f.remoteUrl, self.files)
     
     def getLocalUrls(self):
-        return map(lambda im: im.localUrl, self.images)
+        return map(lambda f: f.localUrl, self.files)
     
     def setRemoteUrls(self, urls):
-        self.images = map(DownloadableImage, urls)
+        self.files = map(DownloadableFile, urls)
 
     def setLocalUrls(self, urls):
-        for url, image in zip(urls, self.images):
-            image.localUrl = url
+        for url, f in zip(urls, self.files):
+            f.localUrl = url
 
     def allDownloaded(self):
-        return all(map(lambda im: im.isDownloaded(), self.images))
+        return all(map(lambda f: f.isDownloaded(), self.files))
 
 class AttributeData(object):
     def __init__(self):
@@ -584,7 +584,7 @@ class CourseLoader(object):
         if memData['image_output_url']:
             text = "img:{}".format(memData['image_output_url'])
         mem.text, remoteImageUrls = markdown.convertAndReturnImages(text)
-        mem.images.extend(map(DownloadableImage, map(fixUrl, remoteImageUrls)))
+        mem.images.extend(map(DownloadableFile, map(fixUrl, remoteImageUrls)))
         for before, after in zip(remoteImageUrls, map(lambda im: im.remoteUrl, mem.images)):
             if after != before:
                 mem.text = mem.text.replace(before, after)
