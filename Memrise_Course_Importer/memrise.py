@@ -406,6 +406,18 @@ class Thing(object):
     def getAttributes(self, nameOrIndex):
         return self.getAttributeData(nameOrIndex).values
 
+    def getAudioFiles(self, nameOrIndex):
+        return self.getAudioColumnData(nameOrIndex).getFiles()
+
+    def setAudioFiles(self, nameOrIndex, files):
+        return self.getAudioColumnData(nameOrIndex).setFiles(files)
+
+    def getImageFiles(self, nameOrIndex):
+        return self.getImageColumnData(nameOrIndex).getFiles()
+
+    def setImageFiles(self, nameOrIndex, files):
+        return self.getImageColumnData(nameOrIndex).setFiles(files)
+
     def getAudioUrls(self, nameOrIndex):
         return self.getAudioColumnData(nameOrIndex).getRemoteUrls()
 

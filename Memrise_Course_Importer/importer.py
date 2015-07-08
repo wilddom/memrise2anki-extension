@@ -44,13 +44,15 @@ class MemriseCourseLoader(QObject):
 			
 		def downloadMedia(self, thing):
 			for colName in thing.pool.getImageColumnNames():
-				thing.setLocalImageUrls(colName, map(self.sender.download, thing.getImageUrls(colName)))
+				for image in filter(lambda f: not f.isDownloaded(), thing.getImageFiles(colName)):
+					image.localUrl = self.sender.download(image.remoteUrl)
 			for colName in thing.pool.getAudioColumnNames():
-				thing.setLocalAudioUrls(colName, map(self.sender.download, thing.getAudioUrls(colName)))
+				for audio in filter(lambda f: not f.isDownloaded(), thing.getAudioFiles(colName)):
+					audio.localUrl = self.sender.download(audio.remoteUrl)
 		
 		def downloadMems(self, thing):
 			for mem in thing.pool.mems.getMems(thing).values():
-				for image in mem.images:
+				for image in filter(lambda f: not f.isDownloaded(), mem.images):
 					image.localUrl = self.sender.download(image.remoteUrl)
 					if image.isDownloaded():
 						mem.text = mem.text.replace(image.remoteUrl, image.localUrl)
