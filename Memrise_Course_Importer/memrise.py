@@ -734,7 +734,8 @@ class Service(object):
         if skipExisting and os.path.isfile(fullMediaPath):
             return localName
         
+        data = self.downloadWithRetry(url, 3).read()
         with open(fullMediaPath, "wb") as mediaFile:
-            mediaFile.write(self.downloadWithRetry(url, 3).read())
+            mediaFile.write(data)
 
         return localName
