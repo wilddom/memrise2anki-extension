@@ -731,7 +731,7 @@ class Service(object):
         localName = "{:s}{:s}".format(uuid.uuid5(uuid.NAMESPACE_URL, url.encode('utf-8')), contentExtension)
         fullMediaPath = os.path.join(self.downloadDirectory, localName)
         
-        if skipExisting and os.path.isfile(fullMediaPath):
+        if skipExisting and os.path.isfile(fullMediaPath) and os.path.getsize(fullMediaPath) > 0:
             return localName
         
         data = self.downloadWithRetry(url, 3).read()
