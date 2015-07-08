@@ -104,8 +104,7 @@ class Mem(object):
         self.direction = Direction()
         self.thingId = None
         self.text = ""
-        self.remoteImageUrls = []
-        self.localImageUrls = []
+        self.images = []
     
     def get(self):
         return self.text
@@ -178,8 +177,18 @@ class Pool(object):
         
         self.uniquifyName = NameUniquifier()
         
+        self.things = {}
         self.schedule = Schedule()
         self.mems = MemCollection()
+
+    def addThing(self, thing):
+        self.things[thing.id] = thing
+        
+    def getThing(self, thingId):
+        self.things.get(thingId, None)
+
+    def hasThing(self, thingId):
+        return thingId in self.things
 
     def addColumn(self, colType, name, index):
         if not colType in Column.Types:
@@ -294,10 +303,39 @@ class TextColumnData(object):
         self.hiddenAlternatives = []
         self.typingCorrects = []
 
+class DownloadableFile(object):
+    def __init__(self, remoteUrl=None):
+        self.remoteUrl = remoteUrl
+        self.localUrl = None
+        
+    def isDownloaded(self):
+        return bool(self.localUrl)
+
 class MediaColumnData(object):
-    def __init__(self):
-        self.remoteUrls = []
-        self.localUrls = []
+    def __init__(self, files=[]):
+        self.files = files
+    
+    def getFiles(self):
+        return self.files
+    
+    def setFile(self, files):
+        self.files = files
+    
+    def getRemoteUrls(self):
+        return map(lambda f: f.remoteUrl, self.files)
+    
+    def getLocalUrls(self):
+        return map(lambda f: f.localUrl, self.files)
+    
+    def setRemoteUrls(self, urls):
+        self.files = map(DownloadableFile, urls)
+
+    def setLocalUrls(self, urls):
+        for url, f in zip(urls, self.files):
+            f.localUrl = url
+
+    def allDownloaded(self):
+        return all(map(lambda f: f.isDownloaded(), self.files))
 
 class AttributeData(object):
     def __init__(self):
@@ -368,29 +406,44 @@ class Thing(object):
     def getAttributes(self, nameOrIndex):
         return self.getAttributeData(nameOrIndex).values
 
+    def getAudioFiles(self, nameOrIndex):
+        return self.getAudioColumnData(nameOrIndex).getFiles()
+
+    def setAudioFiles(self, nameOrIndex, files):
+        return self.getAudioColumnData(nameOrIndex).setFiles(files)
+
+    def getImageFiles(self, nameOrIndex):
+        return self.getImageColumnData(nameOrIndex).getFiles()
+
+    def setImageFiles(self, nameOrIndex, files):
+        return self.getImageColumnData(nameOrIndex).setFiles(files)
+
     def getAudioUrls(self, nameOrIndex):
-        return self.getAudioColumnData(nameOrIndex).remoteUrls
+        return self.getAudioColumnData(nameOrIndex).getRemoteUrls()
 
     def getImageUrls(self, nameOrIndex):
-        return self.getImageColumnData(nameOrIndex).remoteUrls
+        return self.getImageColumnData(nameOrIndex).getRemoteUrls()
 
     def setLocalAudioUrls(self, nameOrIndex, urls):
-        self.getAudioColumnData(nameOrIndex).localUrls = urls
+        self.getAudioColumnData(nameOrIndex).setLocalUrls(urls)
     
     def getLocalAudioUrls(self, nameOrIndex):
-        return self.getAudioColumnData(nameOrIndex).localUrls
+        return self.getAudioColumnData(nameOrIndex).getLocalUrls()
 
     def setLocalImageUrls(self, nameOrIndex, urls):
-        self.getImageColumnData(nameOrIndex).localUrls = urls
+        self.getImageColumnData(nameOrIndex).setLocalUrls(urls)
 
     def getLocalImageUrls(self, nameOrIndex):
-        return self.getImageColumnData(nameOrIndex).localUrls
+        return self.getImageColumnData(nameOrIndex).getLocalUrls()
 
 class ThingLoader(object):
     def __init__(self, pool):
         self.pool = pool
     
     def loadThing(self, row, fixUrl=lambda url: url):
+        if self.pool.hasThing(row['id']):
+            return self.pool.getThing(row['id'])
+        
         thing = Thing(row['id'])
         thing.pool = self.pool
         
@@ -406,13 +459,13 @@ class ThingLoader(object):
         for column in self.pool.getAudioColumns():
             cell = row['columns'][unicode(column.index)]
             data = MediaColumnData()
-            data.remoteUrls = map(fixUrl, self.__getUrls(cell))
+            data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
             thing.setAudioColumnData(column.name, data)
             
         for column in self.pool.getImageColumns():
             cell = row['columns'][unicode(column.index)]
             data = MediaColumnData()
-            data.remoteUrls = map(fixUrl, self.__getUrls(cell))
+            data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
             thing.setImageColumnData(column.name, data)
 
         for attribute in self.pool.getAttributes():
@@ -543,8 +596,8 @@ class CourseLoader(object):
         if memData['image_output_url']:
             text = "img:{}".format(memData['image_output_url'])
         mem.text, remoteImageUrls = markdown.convertAndReturnImages(text)
-        mem.remoteImageUrls.extend(map(fixUrl, remoteImageUrls))
-        for before, after in zip(remoteImageUrls, mem.remoteImageUrls):
+        mem.images.extend(map(DownloadableFile, map(fixUrl, remoteImageUrls)))
+        for before, after in zip(remoteImageUrls, map(lambda im: im.remoteUrl, mem.images)):
             if after != before:
                 mem.text = mem.text.replace(before, after)
         return mem
@@ -681,13 +734,8 @@ class Service(object):
         if skipExisting and os.path.isfile(fullMediaPath):
             return localName
         
-        try:
-            with open(fullMediaPath, "wb") as mediaFile:
-                mediaFile.write(self.downloadWithRetry(url, 3).read())
-        except urllib2.HTTPError as e:
-            if e.code == 403:
-                return False
-            else:
-                raise e
+        data = self.downloadWithRetry(url, 3).read()
+        with open(fullMediaPath, "wb") as mediaFile:
+            mediaFile.write(data)
 
         return localName
