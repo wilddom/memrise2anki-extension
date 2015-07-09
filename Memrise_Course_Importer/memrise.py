@@ -185,7 +185,7 @@ class Pool(object):
         self.things[thing.id] = thing
         
     def getThing(self, thingId):
-        self.things.get(thingId, None)
+        return self.things.get(thingId, None)
 
     def hasThing(self, thingId):
         return thingId in self.things
