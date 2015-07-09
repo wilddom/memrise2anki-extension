@@ -474,6 +474,7 @@ class ThingLoader(object):
             data.values = self.__getAttributes(cell)
             thing.setAttributeData(attribute.name, data)
 
+        self.pool.addThing(thing)
         return thing
 
     @staticmethod
