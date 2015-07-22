@@ -11,7 +11,7 @@
 import re
 import inspect
 
-__version__ = '0.6'
+__version__ = '0.7'
 __author__ = 'Hsiaoming Yang <me@lepture.com>'
 __all__ = [
     'BlockGrammar', 'BlockLexer',
@@ -24,12 +24,16 @@ __all__ = [
 _key_pattern = re.compile(r'\s+')
 _escape_pattern = re.compile(r'&(?!#?\w+;)')
 _newline_pattern = re.compile(r'\r\n|\r')
-_inline_tag = (
-    r'a|em|strong|small|s|cite|q|dfn|abbr|data|time|code|'
-    r'var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo|'
-    r'span|br|wbr|ins|del|img|font'
-)
-_block_tag = r'(?!(?:%s)\b)\w+(?!:/|[^\w\s@]*@)\b' % _inline_tag
+_inline_tags = [
+    'a', 'em', 'strong', 'small', 's', 'cite', 'q', 'dfn', 'abbr', 'data',
+    'time', 'code', 'var', 'samp', 'kbd', 'sub', 'sup', 'i', 'b', 'u', 'mark',
+    'ruby', 'rt', 'rp', 'bdi', 'bdo', 'span', 'br', 'wbr', 'ins', 'del',
+    'img', 'font',
+]
+_pre_tags = ['pre', 'script', 'style']
+_valid_end = r'(?!:/|[^\w\s@]*@)\b'
+_valid_attr = r'''"[^"]*"|'[^']*'|[^'">]'''
+_block_tag = r'(?!(?:%s)\b)\w+%s' % ('|'.join(_inline_tags), _valid_end)
 
 
 def _pure_pattern(regex):
@@ -138,8 +142,8 @@ class BlockGrammar(object):
     block_html = re.compile(
         r'^ *(?:%s|%s|%s) *(?:\n{2,}|\s*$)' % (
             r'<!--[\s\S]*?-->',
-            r'<(%s)[\s\S]+?<\/\1>' % _block_tag,
-            r'''<%s(?:"[^"]*"|'[^']*'|[^'">])*?>''' % _block_tag,
+            r'<(%s)((?:%s)*?)>([\s\S]+?)<\/\1>' % (_block_tag, _valid_attr),
+            r'<%s(?:%s)*?>' % (_block_tag, _valid_attr),
         )
     )
     table = re.compile(
@@ -397,13 +401,22 @@ class BlockLexer(object):
         return item
 
     def parse_block_html(self, m):
-        pre = m.group(1) in ['pre', 'script', 'style']
-        text = m.group(0)
-        self.tokens.append({
-            'type': 'block_html',
-            'pre': pre,
-            'text': text
-        })
+        tag = m.group(1)
+        if not tag:
+            text = m.group(0)
+            self.tokens.append({
+                'type': 'close_html',
+                'text': text
+            })
+        else:
+            attr = m.group(2)
+            text = m.group(3)
+            self.tokens.append({
+                'type': 'open_html',
+                'tag': tag,
+                'extra': attr,
+                'text': text
+            })
 
     def parse_paragraph(self, m):
         text = m.group(1).rstrip('\n')
@@ -421,8 +434,8 @@ class InlineGrammar(object):
     inline_html = re.compile(
         r'^(?:%s|%s|%s)' % (
             r'<!--[\s\S]*?-->',
-            r'<(%s)[\s\S]+?<\/\1>' % _inline_tag,
-            r'''<(?:%s)(?:"[^"]*"|'[^']*'|[^'">])*?>''' % _inline_tag,
+            r'<(\w+%s)((?:%s)*?)>([\s\S]+?)<\/\1>' % (_valid_end, _valid_attr),
+            r'<\w+%s(?:%s)*?>' % (_valid_end, _valid_attr),
         )
     )
     autolink = re.compile(r'^<([^ >]+(@|:)[^ >]+)>')
@@ -497,11 +510,10 @@ class InlineLexer(object):
         self._in_footnote = False
 
         kwargs.update(self.renderer.options)
-        _to_parse = kwargs.get('parse_html') or kwargs.get('parse_inline_html')
-        self._parse_inline_html = _to_parse
+        self._parse_inline_html = kwargs.get('parse_inline_html')
 
-    def __call__(self, text):
-        return self.output(text)
+    def __call__(self, text, rules=None):
+        return self.output(text, rules)
 
     def setup(self, links, footnotes):
         self.footnote_index = 0
@@ -562,15 +574,20 @@ class InlineLexer(object):
         return self.renderer.autolink(link, False)
 
     def output_inline_html(self, m):
-        text = m.group(0)
-        if self._parse_inline_html:
-            if m.group(1) == 'a':
+        tag = m.group(1)
+        if self._parse_inline_html and tag in _inline_tags:
+            text = m.group(3)
+            if tag == 'a':
                 self._in_link = True
                 text = self.output(text, rules=self.inline_html_rules)
                 self._in_link = False
             else:
                 text = self.output(text, rules=self.inline_html_rules)
-        return self.renderer.inline_html(text)
+            extra = m.group(2) or ''
+            html = '<%s%s>%s</%s>' % (tag, extra, text, tag)
+        else:
+            html = m.group(0)
+        return self.renderer.inline_html(html)
 
     def output_footnote(self, m):
         key = _keyify(m.group(1))
@@ -900,8 +917,9 @@ class Markdown(object):
     """The Markdown parser.
 
     :param renderer: An instance of ``Renderer``.
+    :param inline: An inline lexer class or instance.
+    :param block: A block lexer class or instance.
     """
-
     def __init__(self, renderer=None, inline=None, block=None, **kwargs):
         if not renderer:
             renderer = Renderer(**kwargs)
@@ -927,8 +945,7 @@ class Markdown(object):
         self.tokens = []
 
         # detect if it should parse text in block html
-        _to_parse = kwargs.get('parse_html') or kwargs.get('parse_block_html')
-        self._parse_block_html = _to_parse
+        self._parse_block_html = kwargs.get('parse_block_html')
 
     def __call__(self, text):
         return self.parse(text)
@@ -1091,11 +1108,18 @@ class Markdown(object):
         self.inline._in_footnote = False
         return self.renderer.placeholder()
 
-    def output_block_html(self):
+    def output_close_html(self):
         text = self.token['text']
-        if self._parse_block_html and not self.token.get('pre'):
-            text = self.inline(text)
         return self.renderer.block_html(text)
+
+    def output_open_html(self):
+        text = self.token['text']
+        tag = self.token['tag']
+        if self._parse_block_html and tag not in _pre_tags:
+            text = self.inline(text, rules=self.inline.inline_html_rules)
+        extra = self.token.get('extra') or ''
+        html = '<%s%s>%s</%s>' % (tag, extra, text, tag)
+        return self.renderer.block_html(html)
 
     def output_paragraph(self):
         return self.renderer.paragraph(self.inline(self.token['text']))
@@ -1111,7 +1135,6 @@ def markdown(text, escape=True, **kwargs):
     :param escape: if set to False, all html tags will not be escaped.
     :param use_xhtml: output with xhtml tags.
     :param hard_wrap: if set to True, it will has GFM line breaks feature.
-    :param parse_html: parse text in block and inline level html.
     :param parse_block_html: parse text only in block level html.
     :param parse_inline_html: parse text only in inline level html.
     """
