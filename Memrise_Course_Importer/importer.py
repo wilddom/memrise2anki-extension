@@ -95,7 +95,6 @@ class MemriseCourseLoader(QObject):
 		super(MemriseCourseLoader, self).__init__()
 		self.memriseService = memriseService
 		self.url = ""
-		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
 		self.result = None
 		self.exc_info = (None,None,None)
 		self.downloadMedia = True
@@ -125,7 +124,8 @@ class MemriseCourseLoader(QObject):
 		
 	def start(self, url):
 		self.url = url
-		QThreadPool.globalInstance().start(self.runnable)
+		runnable = MemriseCourseLoader.RunnableWrapper(self)
+		QThreadPool.globalInstance().start(runnable)
 	
 	def getResult(self):
 		return self.result
