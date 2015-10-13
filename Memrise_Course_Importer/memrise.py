@@ -719,6 +719,8 @@ class Service(object):
     def toAbsoluteMediaUrl(url):
         if not url:
             return url
+        # fix wrong urls: /static/xyz should map to http://static.memrise.com/xyz
+        url = re.sub("^\/static\/", "/", url)
         return urlparse.urljoin(u"http://static.memrise.com/", url)
     
     def downloadMedia(self, url, skipExisting=False):
