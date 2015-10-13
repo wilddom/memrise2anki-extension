@@ -892,7 +892,11 @@ class MemriseImportDialog(QDialog):
 		mw.deckBrowser.refresh()
 		
 		self.accept()
-		
+
+	def reject(self):
+		if not self.buttons.isHidden():
+			super(MemriseImportDialog, self).reject()
+
 	def loadCourse(self):
 		self.buttons.hide()
 		self.progressBar.show()
