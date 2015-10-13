@@ -140,6 +140,8 @@ class MemriseCourseLoader(QObject):
 		return isinstance(self.exc_info[1], Exception)
 	
 	def run(self):
+		self.result = None
+		self.exc_info = (None,None,None)
 		try:
 			course = self.memriseService.loadCourse(self.url, MemriseCourseLoader.Observer(self))
 			self.result = course
