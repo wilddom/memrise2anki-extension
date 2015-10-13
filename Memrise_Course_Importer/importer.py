@@ -180,6 +180,8 @@ class DownloadFailedBox(QMessageBox):
 class MemriseLoginDialog(QDialog):
 	def __init__(self, memriseService):
 		super(MemriseLoginDialog, self).__init__()
+		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+		
 		self.memriseService = memriseService
 		
 		self.setWindowTitle("Memrise Login")
@@ -225,6 +227,8 @@ class MemriseLoginDialog(QDialog):
 class ModelMappingDialog(QDialog):
 	def __init__(self, col):
 		super(ModelMappingDialog, self).__init__()
+		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+		
 		self.col = col
 		self.models = {}
 		
@@ -363,6 +367,10 @@ class ModelMappingDialog(QDialog):
 
 		return model
 	
+	def reject(self):
+		# prevent close on ESC
+		pass
+	
 	def getModel(self, thing, deck):
 		if thing.pool.id in self.models:
 			return self.models[thing.pool.id]
@@ -381,6 +389,8 @@ class ModelMappingDialog(QDialog):
 class TemplateMappingDialog(QDialog):
 	def __init__(self, col):
 		super(TemplateMappingDialog, self).__init__()
+		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+		
 		self.col = col
 		self.templates = {}
 		
@@ -419,6 +429,10 @@ class TemplateMappingDialog(QDialog):
 	@staticmethod
 	def getFirst(values):
 		return values[0] if 0 < len(values) else u''
+	
+	def reject(self):
+		# prevent close on ESC
+		pass
 	
 	def getTemplate(self, thing, note, direction):
 		model = note.model()
@@ -477,6 +491,8 @@ class FieldHelper(object):
 class FieldMappingDialog(QDialog):
 	def __init__(self, col):
 		super(FieldMappingDialog, self).__init__()
+		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+		
 		self.col = col
 		self.mappings = {}
 		
@@ -578,7 +594,11 @@ class FieldMappingDialog(QDialog):
 			mapping.append((modelFieldSelection, memriseFieldSelection))
 		
 		return mapping
-		
+	
+	def reject(self):
+		# prevent close on ESC
+		pass
+	
 	def getFieldMappings(self, pool, model):
 		if pool.id in self.mappings:
 			if model['id'] in self.mappings[pool.id]:
@@ -608,6 +628,7 @@ class FieldMappingDialog(QDialog):
 class MemriseImportDialog(QDialog):
 	def __init__(self, memriseService):
 		super(MemriseImportDialog, self).__init__()
+		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
 
 		# set up the UI, basically
 		self.setWindowTitle("Import Memrise Course")
@@ -894,6 +915,7 @@ class MemriseImportDialog(QDialog):
 		self.accept()
 
 	def reject(self):
+		# prevent close while background process is running
 		if not self.buttons.isHidden():
 			super(MemriseImportDialog, self).reject()
 
