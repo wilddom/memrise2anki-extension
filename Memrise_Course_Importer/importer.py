@@ -124,8 +124,8 @@ class MemriseCourseLoader(QObject):
 		
 	def start(self, url):
 		self.url = url
-		runnable = MemriseCourseLoader.RunnableWrapper(self)
-		QThreadPool.globalInstance().start(runnable)
+		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
+		QThreadPool.globalInstance().start(self.runnable)
 	
 	def getResult(self):
 		return self.result
