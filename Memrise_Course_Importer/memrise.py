@@ -647,7 +647,7 @@ class Service(object):
         self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar))
         self.opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
     
-    def downloadWithRetry(self, url, tryCount):
+    def openWithRetry(self, url, tryCount=3):
         try:
             return self.opener.open(url)
         except httplib.BadStatusLine:
@@ -655,18 +655,18 @@ class Service(object):
             # so I regret that all we can do is wait and retry.
             if tryCount > 0:
                 time.sleep(0.1)
-                return self.downloadWithRetry(url, tryCount-1)
+                return self.openWithRetry(url, tryCount-1)
             else:
                 raise
     
     def isLoggedIn(self):
         request = urllib2.Request('http://www.memrise.com/login/', None, {'Referer': 'http://www.memrise.com/'})
-        response = self.opener.open(request)
+        response = self.openWithRetry(request)
         return response.geturl() == 'http://www.memrise.com/home/'
         
     def login(self, username, password):
         request1 = urllib2.Request('http://www.memrise.com/login/', None, {'Referer': 'http://www.memrise.com/'})
-        response1 = self.opener.open(request1)
+        response1 = self.openWithRetry(request1)
         soup = BeautifulSoup.BeautifulSoup(response1.read())
         form = soup.find("form", attrs={"action": '/login/'})
         fields = {}
@@ -679,7 +679,7 @@ class Service(object):
         fields['username'] = username
         fields['password'] = password
         request2 = urllib2.Request(response1.geturl(), urllib.urlencode(fields), {'Referer': response1.geturl()})
-        response2 = self.opener.open(request2)
+        response2 = self.openWithRetry(request2)
         return response2.geturl() == 'http://www.memrise.com/home/'
     
     def loadCourse(self, url, observer=None):
@@ -690,7 +690,7 @@ class Service(object):
     
     def loadLevelData(self, courseId, levelIndex):
         levelUrl = self.getJsonLevelUrl(courseId, levelIndex)
-        response = self.downloadWithRetry(levelUrl, 3)
+        response = self.openWithRetry(levelUrl)
         return json.load(response)
     
     @staticmethod
@@ -737,7 +737,7 @@ class Service(object):
         if skipExisting and os.path.isfile(fullMediaPath) and os.path.getsize(fullMediaPath) > 0:
             return localName
         
-        data = self.downloadWithRetry(url, 3).read()
+        data = self.openWithRetry(url).read()
         with open(fullMediaPath, "wb") as mediaFile:
             mediaFile.write(data)
 
