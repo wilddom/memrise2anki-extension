@@ -1,4 +1,4 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, datetime, calendar
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, datetime, calendar, types
 import BeautifulSoup
 import uuid, markdown
 
@@ -648,8 +648,16 @@ class Service(object):
         self.opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
     
     def openWithRetry(self, url, tryCount=3):
+        def read_returnpartial(self, n=-1):
+            try:
+                return self.read_savedoriginal(n)
+            except httplib.IncompleteRead as e:
+                return e.partial
         try:
-            return self.opener.open(url)
+            response = self.opener.open(url)
+            response.read_savedoriginal = response.read
+            response.read = types.MethodType(read_returnpartial, response)
+            return response
         except httplib.BadStatusLine:
             # not clear why this error occurs (seemingly randomly),
             # so I regret that all we can do is wait and retry.
