@@ -1,4 +1,4 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, datetime, calendar, types
+import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, datetime, calendar, functools
 import BeautifulSoup
 import uuid, markdown
 
@@ -639,25 +639,43 @@ class CourseLoader(object):
         
         return level
 
+class HTTP10Connection(httplib.HTTPConnection):
+    _http_vsn = 10
+    _http_vsn_str = "HTTP/1.0"
+
+class IncompleteReadHTTPHandler(urllib2.HTTPHandler):
+    def __init__(self, debuglevel=0):
+        urllib2.HTTPHandler.__init__(self, debuglevel)
+    
+    @staticmethod
+    def read(response, handler, request, n=-1):
+        if hasattr(response, "response10"):
+            return response.response10.read(n)
+        else:
+            try:
+                return response.read_savedoriginal(n)
+            except httplib.IncompleteRead:
+                response.response10 = handler.do_open(HTTP10Connection, request)
+                return response.response10.read(n)
+    
+    def http_open(self, req):
+        response = self.do_open(httplib.HTTPConnection, req)
+        response.read_savedoriginal = response.read
+        response.read = functools.partial(self.read, response, self, req)
+        return response
+
+
 class Service(object):
     def __init__(self, downloadDirectory=None, cookiejar=None):
         self.downloadDirectory = downloadDirectory
         if cookiejar is None:
             cookiejar = cookielib.CookieJar()
-        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar))
+        self.opener = urllib2.build_opener(IncompleteReadHTTPHandler, urllib2.HTTPCookieProcessor(cookiejar))
         self.opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
     
     def openWithRetry(self, url, tryCount=3):
-        def read_returnpartial(self, n=-1):
-            try:
-                return self.read_savedoriginal(n)
-            except httplib.IncompleteRead as e:
-                return e.partial
         try:
-            response = self.opener.open(url)
-            response.read_savedoriginal = response.read
-            response.read = types.MethodType(read_returnpartial, response)
-            return response
+            return self.opener.open(url)
         except httplib.BadStatusLine:
             # not clear why this error occurs (seemingly randomly),
             # so I regret that all we can do is wait and retry.
