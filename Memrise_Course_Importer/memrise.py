@@ -639,38 +639,48 @@ class CourseLoader(object):
         
         return level
 
-class HTTP10Connection(httplib.HTTPConnection):
-    _http_vsn = 10
-    _http_vsn_str = "HTTP/1.0"
-
-class IncompleteReadHTTPHandler(urllib2.HTTPHandler):
+class IncompleteReadHttpAndHttpsHandler(urllib2.HTTPHandler, urllib2.HTTPSHandler):
     def __init__(self, debuglevel=0):
         urllib2.HTTPHandler.__init__(self, debuglevel)
+        urllib2.HTTPSHandler.__init__(self, debuglevel)
     
     @staticmethod
-    def read(response, handler, request, n=-1):
+    def makeHttp10(http_class, *args, **kwargs):
+        h = http_class(*args, **kwargs)
+        h._http_vsn = 10
+        h._http_vsn_str = "HTTP/1.0"
+        return h
+    
+    @staticmethod
+    def read(response, reopen10, n=-1):
         if hasattr(response, "response10"):
             return response.response10.read(n)
         else:
             try:
                 return response.read_savedoriginal(n)
             except httplib.IncompleteRead:
-                response.response10 = handler.do_open(HTTP10Connection, request)
+                response.response10 = reopen10()
                 return response.response10.read(n)
     
-    def http_open(self, req):
-        response = self.do_open(httplib.HTTPConnection, req)
+    def do_open_wrapped(self, http_class, req):
+        response = self.do_open(http_class, req)
         response.read_savedoriginal = response.read
-        response.read = functools.partial(self.read, response, self, req)
+        reopen10 = functools.partial(self.do_open, functools.partial(self.makeHttp10, http_class), req)
+        response.read = functools.partial(self.read, response, reopen10)
         return response
-
+    
+    def http_open(self, req):
+        return self.do_open_wrapped(httplib.HTTPConnection, req)
+    
+    def https_open(self, req):
+        return self.do_open_wrapped(httplib.HTTPSConnection, req)
 
 class Service(object):
     def __init__(self, downloadDirectory=None, cookiejar=None):
         self.downloadDirectory = downloadDirectory
         if cookiejar is None:
             cookiejar = cookielib.CookieJar()
-        self.opener = urllib2.build_opener(IncompleteReadHTTPHandler, urllib2.HTTPCookieProcessor(cookiejar))
+        self.opener = urllib2.build_opener(IncompleteReadHttpAndHttpsHandler, urllib2.HTTPCookieProcessor(cookiejar))
         self.opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
     
     def openWithRetry(self, url, tryCount=3):
