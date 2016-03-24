@@ -448,7 +448,7 @@ class ThingLoader(object):
         thing.pool = self.pool
         
         for column in self.pool.getTextColumns():
-            cell = row['columns'][unicode(column.index)]
+            cell = row['columns'].get(unicode(column.index), {})
             data = TextColumnData()
             data.values = self.__getDefinitions(cell)
             data.alternatives = self.__getAlternatives(cell)
@@ -457,19 +457,19 @@ class ThingLoader(object):
             thing.setTextColumnData(column.name, data)
         
         for column in self.pool.getAudioColumns():
-            cell = row['columns'][unicode(column.index)]
+            cell = row['columns'].get(unicode(column.index), {})
             data = MediaColumnData()
             data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
             thing.setAudioColumnData(column.name, data)
             
         for column in self.pool.getImageColumns():
-            cell = row['columns'][unicode(column.index)]
+            cell = row['columns'].get(unicode(column.index), {})
             data = MediaColumnData()
             data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
             thing.setImageColumnData(column.name, data)
 
         for attribute in self.pool.getAttributes():
-            cell = row['attributes'][unicode(attribute.index)]
+            cell = row['attributes'].get(unicode(attribute.index), {})
             data = AttributeData()
             data.values = self.__getAttributes(cell)
             thing.setAttributeData(attribute.name, data)
@@ -479,13 +479,13 @@ class ThingLoader(object):
 
     @staticmethod
     def __getDefinitions(cell):
-        return map(unicode.strip, cell["val"].split(","))
+        return map(unicode.strip, cell.get("val", u"").split(","))
     
     @staticmethod
     def __getAlternatives(cell):
         data = []
-        for alt in cell["alts"]:
-            value = alt['val']
+        for alt in cell.get("alts", []):
+            value = alt.get('val', u"")
             if value and not value.startswith(u"_"):
                 data.append(value)
         return data
@@ -493,16 +493,16 @@ class ThingLoader(object):
     @staticmethod
     def __getHiddenAlternatives(cell):
         data = []
-        for alt in cell["alts"]:
-            value = alt['val']
+        for alt in cell.get("alts", []):
+            value = alt.get('val', u"")
             if value and value.startswith(u"_"):
-                data.append(value.lstrip(u'_'))
+                data.append(value.lstrip(u"_"))
         return data
     
     @staticmethod
     def __getTypingCorrects(cell):
         data = []
-        for _, typing_corrects in cell["typing_corrects"].items():
+        for _, typing_corrects in cell.get("typing_corrects", {}).items():
             for value in typing_corrects:
                 if value:
                     data.append(value)
@@ -511,15 +511,15 @@ class ThingLoader(object):
     @staticmethod
     def __getUrls(cell):
         data = []
-        for value in cell["val"]:
-            url = value["url"]
+        for value in cell.get("val", u""):
+            url = value.get("url", u"")
             if url:
                 data.append(url)
         return data
 
     @staticmethod
     def __getAttributes(cell):
-        return map(unicode.strip, cell["val"].split(","))
+        return map(unicode.strip, cell.get("val", u"").split(","))
 
 class CourseLoader(object):
     def __init__(self, service):
