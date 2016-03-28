@@ -108,7 +108,7 @@ class MemriseCourseLoader(QObject):
 		while True:
 			try:
 				return self.memriseService.downloadMedia(url, skipExisting=self.skipExistingMedia)
-			except urllib2.HTTPError as e:
+			except (urllib2.HTTPError, urllib2.URLError) as e:
 				if callable(self.askerFunction) and hasattr(self.askerFunction, '__self__'):
 					action = QMetaObject.invokeMethod(self.askerFunction.__self__, self.askerFunction.__name__, Qt.BlockingQueuedConnection, Q_RETURN_ARG(str), Q_ARG(str, url), Q_ARG(str, str(e)), Q_ARG(str, url))
 					if action == "ignore":
