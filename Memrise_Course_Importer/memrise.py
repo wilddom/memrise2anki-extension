@@ -9,6 +9,15 @@ def utcToLocal(utcDt):
     assert utcDt.resolution >= datetime.timedelta(microseconds=1)
     return localDt.replace(microsecond=utcDt.microsecond)
 
+def sanitizeName(name, default=u""):
+    name = re.sub(u"<.*?>", u"", name)
+    name = re.sub(u"\s\s+", u"", name)
+    name = re.sub(u"\ufeff", u"", name)
+    name = name.strip()
+    if not name:
+        return default
+    return name
+
 class Course(object):
     def __init__(self, courseId):
         self.id = courseId
@@ -194,7 +203,7 @@ class Pool(object):
         if not colType in Column.Types:
             return
         
-        column = Column(colType, self.uniquifyName(name), int(index))
+        column = Column(colType, self.uniquifyName(sanitizeName(name, u"Column")), int(index))
         self.columns[column.name] = column
         self.columnsByType[column.type][column.name] = column
         self.columnsByIndex[column.index] = column
@@ -203,7 +212,7 @@ class Pool(object):
         if not attrType in Attribute.Types:
             return
         
-        attribute = Attribute(attrType, self.uniquifyName(name), int(index))
+        attribute = Attribute(attrType, self.uniquifyName(sanitizeName(name, u"Attribute")), int(index))
         self.attributes[attribute.name] = attribute
     
     def getColumn(self, name):
@@ -527,6 +536,7 @@ class CourseLoader(object):
         self.observers = []
         self.levelCount = 0
         self.thingCount = 0
+        self.uniquifyPoolName = NameUniquifier()
     
     def registerObserver(self, observer):
         self.observers.append(observer)
@@ -541,7 +551,7 @@ class CourseLoader(object):
         
         levelData = self.service.loadLevelData(course.id, 1)
         
-        course.title = levelData["session"]["course"]["name"]
+        course.title = sanitizeName(levelData["session"]["course"]["name"], u"Course")
         course.description = levelData["session"]["course"]["description"]
         course.source = levelData["session"]["course"]["source"]["name"]
         course.target = levelData["session"]["course"]["target"]["name"]
@@ -559,10 +569,9 @@ class CourseLoader(object):
         
         return course
     
-    @staticmethod
-    def loadPool(data):
+    def loadPool(self, data):
         pool = Pool(data["id"])
-        pool.name = data["name"]
+        pool.name = self.uniquifyPoolName(sanitizeName(data["name"], u"Pool"))
         
         for index, column in sorted(data["columns"].items()):
             pool.addColumn(column['kind'], column['label'], index)
@@ -611,7 +620,7 @@ class CourseLoader(object):
         
         level = Level(levelData["session"]["level"]["id"])
         level.index = levelData["session"]["level"]["index"]
-        level.title = levelData["session"]["level"]["title"]
+        level.title = sanitizeName(levelData["session"]["level"]["title"])
         level.course = course
 
         poolId = levelData["session"]["level"]["pool_id"]
