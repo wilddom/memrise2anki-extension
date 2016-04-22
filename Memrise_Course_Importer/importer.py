@@ -497,18 +497,28 @@ class FieldMappingDialog(QDialog):
 		self.mappings = {}
 		
 		self.setWindowTitle("Assign Memrise Fields")
-		layout = QVBoxLayout(self)
+		layout = QVBoxLayout()
 		
 		self.label = QLabel("Define the field mapping for the selected note type.")
 		layout.addWidget(self.label)
-		
+
+		viewport = QWidget()
 		self.grid = QGridLayout()
-		layout.addLayout(self.grid)
+		self.grid.setSizeConstraint(QLayout.SetMinAndMaxSize)
+		viewport.setLayout(self.grid)
+
+		scrollArea = QScrollArea()
+		scrollArea.setWidgetResizable(True)
+		scrollArea.setWidget(viewport)
+
+		layout.addWidget(scrollArea)
 		
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		layout.addWidget(buttons)
 		
+		self.setLayout(layout)
+
 		self.memsEnabled = False
 
 	def setMemsEnabled(self, value):
@@ -520,6 +530,7 @@ class FieldMappingDialog(QDialog):
 			child = layout.takeAt(0)
 			if child.widget() is not None:
 				child.widget().deleteLater()
+				child.widget().setParent(None)
 			elif child.layout() is not None:
 				FieldMappingDialog.clearLayout(child.layout())
 
@@ -568,8 +579,12 @@ class FieldMappingDialog(QDialog):
 	def __buildGrid(self, pool, model):
 		self.clearLayout(self.grid)
 
-		self.grid.addWidget(QLabel("Note type fields:"), 0, 0)
-		self.grid.addWidget(QLabel("Memrise fields:"), 0, 1)
+		label1 = QLabel("Note type fields:")
+		label1.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+		label2 = QLabel("Memrise fields:")
+		label2.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+		self.grid.addWidget(label1, 0, 0)
+		self.grid.addWidget(label2, 0, 1)
 				
 		fieldNames = filter(lambda fieldName: not fieldName in [_('Thing'), _('Level')], self.col.models.fieldNames(model))
 		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
