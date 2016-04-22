@@ -537,6 +537,7 @@ class CourseLoader(object):
         self.observers = []
         self.levelCount = 0
         self.thingCount = 0
+        self.directionThing = {}
         self.uniquifyPoolName = NameUniquifier()
     
     def registerObserver(self, observer):
@@ -646,6 +647,12 @@ class CourseLoader(object):
         for _, thingRowData in levelData["things"].items():
             thing = thingLoader.loadThing(thingRowData, self.service.toAbsoluteMediaUrl)
             level.things.append(thing)
+            
+            if thing.id in self.directionThing.get(level.direction, {}):
+                self.thingCount += 1
+                self.notify('thingCountChanged', self.thingCount)
+            self.directionThing.setdefault(level.direction, {})[thing.id] = thing
+            
             self.notify('thingLoaded', thing)
         
         return level
