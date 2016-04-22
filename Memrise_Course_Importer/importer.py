@@ -879,7 +879,7 @@ class MemriseImportDialog(QDialog):
 					if _('Level') in ankiNote.keys():
 						levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
 						levels.add(unicode(level.index))
-						ankiNote[_('Level')] = u', '.join(levels)
+						ankiNote[_('Level')] = u', '.join(sorted(levels))
 					
 					if _('Thing') in ankiNote.keys():
 						ankiNote[_('Thing')] = unicode(thing.id)
