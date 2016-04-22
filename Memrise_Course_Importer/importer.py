@@ -340,7 +340,7 @@ class ModelMappingDialog(QDialog):
 		m['css'] += "\n.alts {\n font-size: 14px;\n}"
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
 		
-		for direction in course.directions:
+		for direction in pool.directions:
 			t = mm.newTemplate(unicode(direction))
 			self.__createTemplate(t, pool, direction.front, direction.back, self.memsEnabled and direction in pool.mems.getDirections())
 			mm.addTemplate(m, t)

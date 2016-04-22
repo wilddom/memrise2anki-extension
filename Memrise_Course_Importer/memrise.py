@@ -189,6 +189,7 @@ class Pool(object):
         self.things = {}
         self.schedule = Schedule()
         self.mems = MemCollection()
+        self.directions = set()
 
     def addThing(self, thing):
         self.things[thing.id] = thing
@@ -632,6 +633,7 @@ class CourseLoader(object):
 
         level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
         level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
+        level.pool.directions.add(level.direction)
         course.directions.add(level.direction)
 
         for userData in levelData["thingusers"]:
