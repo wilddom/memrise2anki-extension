@@ -670,7 +670,7 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(label)
 		layout.addWidget(self.courseUrlLineEdit)
 		
-		label = QLabel("Minimal level tag width filled width zeros:")
+		label = QLabel("Minimal number of digits in the level tag:")
 		self.minimalLevelTagWidthSpinBox = QSpinBox()
 		self.minimalLevelTagWidthSpinBox.setMinimum(1)
 		self.minimalLevelTagWidthSpinBox.setMaximum(9)
