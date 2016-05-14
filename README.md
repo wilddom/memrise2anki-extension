@@ -14,7 +14,7 @@ How to install
 Note type
 ---------
 
-A special note type is created with separate fiels for text definitions, text alternatives, attributes, images,
+A special note type is created with separate fields for text definitions, text alternatives, attributes, images,
 audio and levels. This is done because it's not possible to accurately reproduce the versatility of Memrise levels.
 But having the fields separate gives the flexibility to rebuild them manually with Anki templates.
 All fields can be renamed and reordered freely.
@@ -57,9 +57,9 @@ Mems
 ----
 
 The import of your mems from Memrise is possible. A mem is assigned to a testing direction (front to back), therefore a field needs
-to be created for each direction. As Anki does not officially support embedded media (youtube, etc.) the option to embed online media
-is experimental, embedded media may or may not work depending on your platform. If the option is disabled (default), a link will
-be shown instead.
+to be created for each direction. This means that only the mems selected by the currently logged in user are imported. As Anki
+does not officially support embedded media (youtube, etc.) the option to embed online media is experimental, embedded media
+may or may not work depending on your platform. If the option is disabled (default), a link will be shown instead.
 
 
 Bug Reports
