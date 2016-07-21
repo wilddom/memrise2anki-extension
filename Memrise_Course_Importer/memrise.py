@@ -564,9 +564,12 @@ class CourseLoader(object):
         self.notify('thingCountChanged', self.thingCount)
         
         for levelIndex in range(1,self.levelCount+1):
-            level = self.loadLevel(course, levelIndex)
-            if level:
-                course.levels.append(level)
+            try:
+                level = self.loadLevel(course, levelIndex)
+                if level:
+                    course.levels.append(level)
+            except LevelNotFoundError:
+                pass
             self.notify('levelLoaded', levelIndex, level)
         
         return course
@@ -693,6 +696,12 @@ class IncompleteReadHttpAndHttpsHandler(urllib2.HTTPHandler, urllib2.HTTPSHandle
     def https_open(self, req):
         return self.do_open_wrapped(httplib.HTTPSConnection, req)
 
+class MemriseError(RuntimeError):
+    pass
+
+class LevelNotFoundError(MemriseError):
+    pass
+
 class Service(object):
     def __init__(self, downloadDirectory=None, cookiejar=None):
         self.downloadDirectory = downloadDirectory
@@ -743,15 +752,21 @@ class Service(object):
         return courseLoader.loadCourse(self.getCourseIdFromUrl(url))
     
     def loadLevelData(self, courseId, levelIndex):
-        levelUrl = self.getJsonLevelUrl(courseId, levelIndex)
-        response = self.openWithRetry(levelUrl)
-        return json.load(response)
+        try:
+            levelUrl = self.getJsonLevelUrl(courseId, levelIndex)
+            response = self.openWithRetry(levelUrl)
+            return json.load(response)
+        except urllib2.HTTPError as e:
+            if e.code == 404:
+                raise LevelNotFoundError("Level not found: {}".format(levelIndex))
+            else:
+                raise
     
     @staticmethod
     def getCourseIdFromUrl(url):
         match = re.match('http://www.memrise.com/course/(\d+)/.+/', url)
         if not match:
-            raise Exception("Import failed. Does your URL look like the sample URL above?")
+            raise MemriseError("Import failed. Does your URL look like the sample URL above?")
         return int(match.group(1))
 
     @staticmethod
@@ -762,7 +777,7 @@ class Service(object):
     @staticmethod
     def getHtmlLevelUrl(courseUrl, levelNum):
         if not re.match('http://www.memrise.com/course/\d+/.+/', courseUrl):
-            raise Exception("Import failed. Does your URL look like the sample URL above?")
+            raise MemriseError("Import failed. Does your URL look like the sample URL above?")
         return u"{:s}{:d}".format(courseUrl, levelNum)
     
     @staticmethod
