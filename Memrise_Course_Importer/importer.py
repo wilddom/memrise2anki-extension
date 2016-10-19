@@ -961,3 +961,4 @@ def startCourseImporter():
 action = QAction("Import Memrise Course...", mw)
 mw.connect(action, SIGNAL("triggered()"), startCourseImporter)
 mw.form.menuTools.addAction(action)
+
