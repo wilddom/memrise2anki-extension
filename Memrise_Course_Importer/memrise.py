@@ -723,12 +723,12 @@ class Service(object):
                 raise
     
     def isLoggedIn(self):
-        request = urllib2.Request('http://www.memrise.com/login/', None, {'Referer': 'http://www.memrise.com/'})
+        request = urllib2.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
         response = self.openWithRetry(request)
-        return response.geturl() == 'http://www.memrise.com/home/'
+        return bool(re.match('https?://www.memrise.com/home/', response.geturl()))
         
     def login(self, username, password):
-        request1 = urllib2.Request('http://www.memrise.com/login/', None, {'Referer': 'http://www.memrise.com/'})
+        request1 = urllib2.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
         response1 = self.openWithRetry(request1)
         soup = BeautifulSoup.BeautifulSoup(response1.read())
         form = soup.find("form", attrs={"action": '/login/'})
@@ -743,7 +743,7 @@ class Service(object):
         fields['password'] = password
         request2 = urllib2.Request(response1.geturl(), urllib.urlencode(fields), {'Referer': response1.geturl()})
         response2 = self.openWithRetry(request2)
-        return response2.geturl() == 'http://www.memrise.com/home/'
+        return bool(re.match('https?://www.memrise.com/home/', response2.geturl()))
     
     def loadCourse(self, url, observer=None):
         courseLoader = CourseLoader(self)
@@ -764,33 +764,33 @@ class Service(object):
     
     @staticmethod
     def getCourseIdFromUrl(url):
-        match = re.match('http://www.memrise.com/course/(\d+)/.+/', url)
+        match = re.match('https?://www.memrise.com/course/(\d+)/.+/', url)
         if not match:
             raise MemriseError("Import failed. Does your URL look like the sample URL above?")
         return int(match.group(1))
 
     @staticmethod
     def checkCourseUrl(url):
-        match = re.match('http://www.memrise.com/course/\d+/.+/', url)
+        match = re.match('https?://www.memrise.com/course/\d+/.+/', url)
         return bool(match)
 
     @staticmethod
     def getHtmlLevelUrl(courseUrl, levelNum):
-        if not re.match('http://www.memrise.com/course/\d+/.+/', courseUrl):
+        if not re.match('https?://www.memrise.com/course/\d+/.+/', courseUrl):
             raise MemriseError("Import failed. Does your URL look like the sample URL above?")
         return u"{:s}{:d}".format(courseUrl, levelNum)
     
     @staticmethod
     def getJsonLevelUrl(courseId, levelIndex):
-        return u"http://www.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
+        return u"https://www.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
     
     @staticmethod
     def toAbsoluteMediaUrl(url):
         if not url:
             return url
-        # fix wrong urls: /static/xyz should map to http://static.memrise.com/xyz
+        # fix wrong urls: /static/xyz should map to https://static.memrise.com/xyz
         url = re.sub("^\/static\/", "/", url)
-        return urlparse.urljoin(u"http://static.memrise.com/", url)
+        return urlparse.urljoin(u"https://static.memrise.com/", url)
     
     def downloadMedia(self, url, skipExisting=False):
         if not self.downloadDirectory:
