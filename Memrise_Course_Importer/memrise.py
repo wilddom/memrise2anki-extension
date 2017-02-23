@@ -790,7 +790,7 @@ class Service(object):
             return url
         # fix wrong urls: /static/xyz should map to https://static.memrise.com/xyz
         url = re.sub("^\/static\/", "/", url)
-        return urlparse.urljoin(u"https://static.memrise.com/", url)
+        return urlparse.urljoin(u"http://static.memrise.com/", url)
     
     def downloadMedia(self, url, skipExisting=False):
         if not self.downloadDirectory:
