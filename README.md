@@ -5,11 +5,22 @@ An extension for Anki 2 that downloads and converts a course from Memrise into a
 
 How to install
 --------------
+
+### AnkiHub
+
+1. Install AnkiHub in Anki (code: 116826216)
+2. Restart Anki
+3. Go to Tools -> Add-Ons -> From GitHub
+4. Enter the GitHub path (e.g. wilddom/memrise2anki-extension)
+
+### Manually
+
 1. Download the ZIP-File from github
 2. Open Anki
 3. Click on Tools -> Add-ons -> Open Add-ons Folder...
 4. Extract the ZIP-File (content of memrise2anki-extension-master) in that folder
 5. Restart Anki
+
 
 Note type
 ---------
