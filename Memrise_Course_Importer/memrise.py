@@ -594,11 +594,11 @@ class CourseLoader(object):
         scheduleInfo.direction.back = pool.getColumnName(data["column_a"])
         scheduleInfo.ignored = data['ignored']
         scheduleInfo.interval = data['interval']
-        scheduleInfo.correct = data.get('total_correct', 0)
-        scheduleInfo.incorrect = data.get('total_incorrect', 0)
-        scheduleInfo.total = scheduleInfo.correct + scheduleInfo.incorrect
+        scheduleInfo.correct = data.get('correct', 0)
+        scheduleInfo.incorrect = data.get('attempts', 0) - data.get('correct', 0)
+        scheduleInfo.total = data.get('attempts', 0)
         scheduleInfo.streak = data['current_streak']
-        scheduleInfo.due = utcToLocal(datetime.datetime.strptime(data['next_date'], "%Y-%m-%dT%H:%M:%S"))
+        scheduleInfo.due = utcToLocal(datetime.datetime.strptime(data['next_date'], "%Y-%m-%dT%H:%M:%SZ"))
         return scheduleInfo
     
     @staticmethod
