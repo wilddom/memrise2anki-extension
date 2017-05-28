@@ -892,12 +892,12 @@ class MemriseImportDialog(QDialog):
 					ankiNote.flush()
 					noteCache[thing.id] = ankiNote
 	
-					if self.importScheduleCheckBox.isChecked():
-						scheduleInfo = thing.pool.schedule.get(level.direction, thing)
-						if scheduleInfo:
-							template = self.templateMapper.getTemplate(thing, ankiNote, scheduleInfo.direction)
-							cards = [card for card in ankiNote.cards() if card.ord == template['ord']]
-							
+					scheduleInfo = thing.pool.schedule.get(level.direction, thing)
+					if scheduleInfo:
+						template = self.templateMapper.getTemplate(thing, ankiNote, scheduleInfo.direction)
+						cards = [card for card in ankiNote.cards() if card.ord == template['ord']]
+
+						if self.importScheduleCheckBox.isChecked():
 							if scheduleInfo.interval is not None:
 								for card in cards:
 									card.type = 2
@@ -908,9 +908,14 @@ class MemriseImportDialog(QDialog):
 									card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
 									card.factor = 2500
 									card.flush()
-	
 							if scheduleInfo.ignored:
 								mw.col.sched.suspendCards([card.id for card in cards])
+
+						if scheduleInfo.position > 0:
+							for card in cards:
+								if card.type == 0 and card.queue == 0:
+									card.due = scheduleInfo.position
+									card.flush()
 
 					self.progressBar.setValue(self.progressBar.value()+1)
 					QApplication.processEvents()

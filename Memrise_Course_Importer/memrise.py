@@ -66,9 +66,13 @@ class Schedule(object):
         self.thingDirection.setdefault(info.thingId, {})[info.direction] = info
         
     def get(self, direction, thing):
+        if not isinstance(thing, Thing):
+            thing = Thing(thing)
         return self.directionThing.get(direction, {}).get(thing.id)
     
     def getScheduleInfos(self, thing):
+        if not isinstance(thing, Thing):
+            thing = Thing(thing)
         return self.thingDirection.get(thing.id, {})
     
     def getDirections(self):
@@ -78,6 +82,7 @@ class ScheduleInfo(object):
     def __init__(self):
         self.thingId = None
         self.direction = Direction()
+        self.position = 0
         self.interval = None
         self.ignored = False
         self.total = 0
@@ -190,6 +195,8 @@ class Pool(object):
         self.schedule = Schedule()
         self.mems = MemCollection()
         self.directions = set()
+
+        self.nextPosition = 1
 
     def addThing(self, thing):
         self.things[thing.id] = thing
@@ -305,6 +312,11 @@ class Pool(object):
     
     def countAttributes(self):
         return len(self.attributes)
+
+    def getNextPosition(self):
+		nextPosition = self.nextPosition
+		self.nextPosition += 1
+		return nextPosition
 
 class TextColumnData(object):
     def __init__(self):
@@ -588,10 +600,16 @@ class CourseLoader(object):
     
     @staticmethod
     def loadScheduleInfo(data, pool):
-        scheduleInfo = ScheduleInfo()
+        direction = Direction()
+        direction.front = pool.getColumnName(data["column_b"])
+        direction.back = pool.getColumnName(data["column_a"])
+
+        scheduleInfo = pool.schedule.get(direction, data['thing_id'])
+        if not scheduleInfo:
+            scheduleInfo = ScheduleInfo()
+
         scheduleInfo.thingId = data['thing_id']
-        scheduleInfo.direction.front = pool.getColumnName(data["column_b"])
-        scheduleInfo.direction.back = pool.getColumnName(data["column_a"])
+        scheduleInfo.direction = direction
         scheduleInfo.ignored = data['ignored']
         scheduleInfo.interval = data['interval']
         scheduleInfo.correct = data.get('correct', 0)
@@ -639,6 +657,16 @@ class CourseLoader(object):
         level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
         level.pool.directions.add(level.direction)
         course.directions.add(level.direction)
+
+        for boxesData in levelData["boxes"]:
+            direction = Direction()
+            direction.front = level.pool.getColumnName(boxesData["column_b"])
+            direction.back = level.pool.getColumnName(boxesData["column_a"])
+            scheduleInfo = ScheduleInfo()
+            scheduleInfo.thingId = boxesData["thing_id"]
+            scheduleInfo.direction = direction
+            scheduleInfo.position = level.pool.getNextPosition()
+            level.pool.schedule.add(scheduleInfo)
 
         for userData in levelData["thingusers"]:
             level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
