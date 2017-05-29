@@ -28,6 +28,7 @@ class Course(object):
         self.levels = []
         self.pools = {}
         self.directions = set()
+        self.nextPosition = 1
 
     def __iter__(self):
         for level in self.levels:
@@ -35,6 +36,11 @@ class Course(object):
                 
     def __len__(self):
         return len(self.levels)
+
+    def getNextPosition(self):
+        nextPosition = self.nextPosition
+        self.nextPosition += 1
+        return nextPosition
 
 class Direction(object):
     def __init__(self, front=None, back=None):
@@ -196,8 +202,6 @@ class Pool(object):
         self.mems = MemCollection()
         self.directions = set()
 
-        self.nextPosition = 1
-
     def addThing(self, thing):
         self.things[thing.id] = thing
         
@@ -312,11 +316,6 @@ class Pool(object):
     
     def countAttributes(self):
         return len(self.attributes)
-
-    def getNextPosition(self):
-		nextPosition = self.nextPosition
-		self.nextPosition += 1
-		return nextPosition
 
 class TextColumnData(object):
     def __init__(self):
@@ -665,7 +664,7 @@ class CourseLoader(object):
             scheduleInfo = ScheduleInfo()
             scheduleInfo.thingId = boxesData["thing_id"]
             scheduleInfo.direction = direction
-            scheduleInfo.position = level.pool.getNextPosition()
+            scheduleInfo.position = course.getNextPosition()
             level.pool.schedule.add(scheduleInfo)
 
         for userData in levelData["thingusers"]:

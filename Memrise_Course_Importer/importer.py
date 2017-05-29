@@ -898,8 +898,16 @@ class MemriseImportDialog(QDialog):
 						cards = [card for card in ankiNote.cards() if card.ord == template['ord']]
 
 						if self.importScheduleCheckBox.isChecked():
-							if scheduleInfo.interval is not None:
-								for card in cards:
+							for card in cards:
+								if scheduleInfo.interval is None:
+									card.type = 0
+									card.queue = 0
+									card.ivl = 0
+									card.reps = 0
+									card.lapses = 0
+                                                                        card.due = scheduleInfo.position
+									card.factor = 0
+								else:
 									card.type = 2
 									card.queue = 2
 									card.ivl = int(round(scheduleInfo.interval))
@@ -907,11 +915,10 @@ class MemriseImportDialog(QDialog):
 									card.lapses = scheduleInfo.incorrect
 									card.due = mw.col.sched.today + (scheduleInfo.due.date() - datetime.date.today()).days
 									card.factor = 2500
-									card.flush()
+								card.flush()
 							if scheduleInfo.ignored:
 								mw.col.sched.suspendCards([card.id for card in cards])
-
-						if scheduleInfo.position > 0:
+						else:
 							for card in cards:
 								if card.type == 0 and card.queue == 0:
 									card.due = scheduleInfo.position
