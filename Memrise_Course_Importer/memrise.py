@@ -637,9 +637,6 @@ class CourseLoader(object):
     def loadLevel(self, course, levelIndex):
         levelData = self.service.loadLevelData(course.id, levelIndex)
         
-        if levelData["success"] == False:
-            return None
-        
         level = Level(levelData["session"]["level"]["id"])
         level.index = levelData["session"]["level"]["index"]
         level.title = sanitizeName(levelData["session"]["level"]["title"])
@@ -669,7 +666,7 @@ class CourseLoader(object):
 
         for userData in levelData["thingusers"]:
             level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
-            memData = levelData["mems"].get(unicode(userData["thing_id"]),{}).get(unicode(userData["mem_id"]))
+            memData = levelData.get("mems", {}).get(unicode(userData["thing_id"]),{}).get(unicode(userData["mem_id"]))
             if memData:
                 level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
 
@@ -784,7 +781,7 @@ class Service(object):
             response = self.openWithRetry(levelUrl)
             return json.load(response)
         except urllib2.HTTPError as e:
-            if e.code == 404:
+            if e.code == 404 or e.code == 400:
                 raise LevelNotFoundError("Level not found: {}".format(levelIndex))
             else:
                 raise
