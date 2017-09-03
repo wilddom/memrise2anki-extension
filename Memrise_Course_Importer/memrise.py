@@ -562,14 +562,14 @@ class CourseLoader(object):
     def loadCourse(self, courseId):
         course = Course(courseId)
         
-        levelData = self.service.loadLevelData(course.id, 1)
+        courseData = self.service.loadCourseData(course.id)
         
-        course.title = sanitizeName(levelData["session"]["course"]["name"], u"Course")
-        course.description = levelData["session"]["course"]["description"]
-        course.source = levelData["session"]["course"]["source"]["name"]
-        course.target = levelData["session"]["course"]["target"]["name"]
-        self.levelCount = levelData["session"]["course"]["num_levels"]
-        self.thingCount = levelData["session"]["course"]["num_things"]
+        course.title = sanitizeName(courseData["session"]["course"]["name"], u"Course")
+        course.description = courseData["session"]["course"]["description"]
+        course.source = courseData["session"]["course"]["source"]["name"]
+        course.target = courseData["session"]["course"]["target"]["name"]
+        self.levelCount = courseData["session"]["course"]["num_levels"]
+        self.thingCount = courseData["session"]["course"]["num_things"]
         
         self.notify('levelCountChanged', self.levelCount)
         self.notify('thingCountChanged', self.thingCount)
@@ -580,7 +580,7 @@ class CourseLoader(object):
                 if level:
                     course.levels.append(level)
             except LevelNotFoundError:
-                pass
+                level = {}
             self.notify('levelLoaded', levelIndex, level)
         
         return course
@@ -775,6 +775,19 @@ class Service(object):
             courseLoader.registerObserver(observer)
         return courseLoader.loadCourse(self.getCourseIdFromUrl(url))
     
+    def loadCourseData(self, courseId):
+        courseUrl = self.getHtmlCourseUrl(courseId)
+        response = self.openWithRetry(courseUrl)
+        soup = BeautifulSoup.BeautifulSoup(response.read())
+        levelNums = [int(tag.string) for tag in soup.findAll('div', {'class': 'level-index'})]
+        levelCount = max(levelNums) if len(levelNums) > 0 else 0
+
+        for levelIndex in range(1,levelCount+1):
+            try:
+                return self.loadLevelData(courseId, levelIndex)
+	    except LevelNotFoundError:
+		pass
+
     def loadLevelData(self, courseId, levelIndex):
         try:
             levelUrl = self.getJsonLevelUrl(courseId, levelIndex)
@@ -799,10 +812,8 @@ class Service(object):
         return bool(match)
 
     @staticmethod
-    def getHtmlLevelUrl(courseUrl, levelNum):
-        if not re.match('https?://www.memrise.com/course/\d+/.+/', courseUrl):
-            raise MemriseError("Import failed. Does your URL look like the sample URL above?")
-        return u"{:s}{:d}".format(courseUrl, levelNum)
+    def getHtmlCourseUrl(courseId):
+        return u'https://www.memrise.com/course/{:d}/'.format(courseId)
     
     @staticmethod
     def getJsonLevelUrl(courseId, levelIndex):
