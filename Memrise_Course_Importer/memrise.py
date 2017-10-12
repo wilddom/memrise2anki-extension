@@ -106,6 +106,9 @@ class MemCollection(object):
         self.directionThing.setdefault(mem.direction, {})[mem.thingId] = mem
         self.thingDirection.setdefault(mem.thingId, {})[mem.direction] = mem
         
+    def has(self, direction, thing):
+        return thing.id in self.directionThing.get(direction, {})
+
     def get(self, direction, thing):
         return self.directionThing.get(direction, {}).get(thing.id, Mem())
 
@@ -461,10 +464,7 @@ class ThingLoader(object):
     def __init__(self, pool):
         self.pool = pool
     
-    def loadThing(self, row, fixUrl=lambda url: url):
-        if self.pool.hasThing(row['id']):
-            return self.pool.getThing(row['id'])
-        
+    def loadThing(self, row, fixUrl=lambda url: url):        
         thing = Thing(row['id'])
         thing.pool = self.pool
         
@@ -495,7 +495,6 @@ class ThingLoader(object):
             data.values = self.__getAttributes(cell)
             thing.setAttributeData(attribute.name, data)
 
-        self.pool.addThing(thing)
         return thing
 
     @staticmethod
@@ -644,7 +643,8 @@ class CourseLoader(object):
 
         poolId = levelData["session"]["level"]["pool_id"]
         if not poolId in course.pools:
-            pool = self.loadPool(levelData["pools"][unicode(poolId)])
+            poolData = self.service.loadPoolData(poolId)
+            pool = self.loadPool(poolData)
             pool.course = course
             course.pools[poolId] = pool
         level.pool = course.pools[poolId]
@@ -654,27 +654,33 @@ class CourseLoader(object):
         level.pool.directions.add(level.direction)
         course.directions.add(level.direction)
 
-        for boxesData in levelData["boxes"]:
-            direction = Direction()
-            direction.front = level.pool.getColumnName(boxesData["column_b"])
-            direction.back = level.pool.getColumnName(boxesData["column_a"])
+        for learnable in levelData["learnables"]:
             scheduleInfo = ScheduleInfo()
-            scheduleInfo.thingId = boxesData["thing_id"]
-            scheduleInfo.direction = direction
+            scheduleInfo.thingId = learnable["thing_id"]
+            scheduleInfo.direction = level.direction
             scheduleInfo.position = course.getNextPosition()
             level.pool.schedule.add(scheduleInfo)
 
-        for userData in levelData["thingusers"]:
-            level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
-            memData = levelData.get("mems", {}).get(unicode(userData["thing_id"]),{}).get(unicode(userData["mem_id"]))
-            if memData:
-                level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
+        thingusers = {userData["thing_id"]: userData for userData in levelData["thingusers"]}
 
         thingLoader = ThingLoader(level.pool)
-        for _, thingRowData in levelData["things"].items():
-            thing = thingLoader.loadThing(thingRowData, self.service.toAbsoluteMediaUrl)
+        for learnable in levelData["learnables"]:
+            thingId = learnable['thing_id']
+            if level.pool.hasThing(thingId):
+                thing = level.pool.getThing(thingId)
+	    else:
+                thingData = self.service.loadThingData(thingId)
+                thing = thingLoader.loadThing(thingData)
+                level.pool.addThing(thing)
             level.things.append(thing)
-            
+
+            if thing.id in thingusers:
+                userData = thingusers[thing.id]
+                level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
+                if userData["mem_id"] and not level.pool.mems.has(level.direction, thing):
+                    memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], userData["column_a"], userData["column_b"])
+                    level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
+
             if thing.id in self.directionThing.get(level.direction, {}):
                 self.thingCount += 1
                 self.notify('thingCountChanged', self.thingCount)
@@ -799,6 +805,24 @@ class Service(object):
             else:
                 raise
     
+    def loadPoolData(self, poolId):
+        poolUrl = self.getJsonPoolUrl(poolId)
+        response = self.openWithRetry(poolUrl)
+        result = json.load(response)
+        return result.get("pool", result)
+
+    def loadThingData(self, thingId):
+        thingUrl = self.getJsonThingUrl(thingId)
+        response = self.openWithRetry(thingUrl)
+        result = json.load(response)
+        return result.get("thing", result)
+
+    def loadMemData(self, memId, thingId, colA, colB):
+        memUrl = self.getJsonMemUrl(memId, thingId, colA, colB)
+        response = self.openWithRetry(memUrl)
+        result = json.load(response)
+        return result.get("mem", result)
+
     @staticmethod
     def getCourseIdFromUrl(url):
         match = re.match('https?://www.memrise.com/course/(\d+)/.+/', url)
@@ -819,6 +843,18 @@ class Service(object):
     def getJsonLevelUrl(courseId, levelIndex):
         return u"https://www.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
     
+    @staticmethod
+    def getJsonPoolUrl(poolId):
+        return u"https://www.memrise.com/api/pool/get/?pool_id={:d}".format(poolId)
+
+    @staticmethod
+    def getJsonThingUrl(thingId):
+        return u"https://www.memrise.com/api/thing/get/?thing_id={:d}".format(thingId)
+
+    @staticmethod
+    def getJsonMemUrl(memId, thingId, colA, colB):
+        return u"https://www.memrise.com/api/mem/get/?mem_id={:d}&thing_id={:d}&column_a={:d}&column_b={:d}".format(memId, thingId, colA, colB)
+
     @staticmethod
     def toAbsoluteMediaUrl(url):
         if not url:
