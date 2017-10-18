@@ -9,7 +9,7 @@ How to install
 ### Add-On
 
 1. Go to Tools -> Add-Ons -> Browse & Install...
-2. Enter code: 1340350102
+2. Enter code: `deleted`
 3. Restart Anki
 
 ### AnkiHub
