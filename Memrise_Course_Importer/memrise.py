@@ -678,7 +678,7 @@ class CourseLoader(object):
                 userData = thingusers[thing.id]
                 level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
                 if userData["mem_id"] and not level.pool.mems.has(level.direction, thing):
-                    memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], userData["column_a"], userData["column_b"])
+                    memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], int(userData["learnable_id"]), userData["column_a"], userData["column_b"])
                     level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
 
             if thing.id in self.directionThing.get(level.direction, {}):
@@ -730,6 +730,9 @@ class MemriseError(RuntimeError):
     pass
 
 class LevelNotFoundError(MemriseError):
+    pass
+
+class MemNotFoundError(MemriseError):
     pass
 
 class Service(object):
@@ -817,11 +820,23 @@ class Service(object):
         result = json.load(response)
         return result.get("thing", result)
 
-    def loadMemData(self, memId, thingId, colA, colB):
-        memUrl = self.getJsonMemUrl(memId, thingId, colA, colB)
-        response = self.openWithRetry(memUrl)
-        result = json.load(response)
-        return result.get("mem", result)
+    def loadMemData(self, memId, thingId, learnableId, colA, colB):
+        try:
+            memUrl = self.getJsonMemUrl(memId, thingId, colA, colB)
+            response = self.openWithRetry(memUrl)
+            result = json.load(response)
+            return result.get("mem", result)
+        except urllib2.HTTPError as e:
+            if e.code == 404 or e.code == 400:
+                memsUrl = self.getJsonManyMemUrl(thingId, learnableId)
+                response = self.openWithRetry(memsUrl)
+                result = json.load(response)
+                for memData in result.get("mems", {}):
+                    if memData.get('id') == memId:
+                        return memData
+            else:
+                raise
+        raise MemNotFoundError(memId)
 
     @staticmethod
     def getCourseIdFromUrl(url):
@@ -854,6 +869,10 @@ class Service(object):
     @staticmethod
     def getJsonMemUrl(memId, thingId, colA, colB):
         return u"https://www.memrise.com/api/mem/get/?mem_id={:d}&thing_id={:d}&column_a={:d}&column_b={:d}".format(memId, thingId, colA, colB)
+
+    @staticmethod
+    def getJsonManyMemUrl(thingId, learnableId):
+        return u"https://www.memrise.com/api/mem/get_many_for_thing/?thing_id={:d}&learnable_id={:d}".format(thingId, learnableId)
 
     @staticmethod
     def toAbsoluteMediaUrl(url):
