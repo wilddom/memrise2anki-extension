@@ -670,7 +670,7 @@ class CourseLoader(object):
                 thing = level.pool.getThing(thingId)
 	    else:
                 thingData = self.service.loadThingData(thingId)
-                thing = thingLoader.loadThing(thingData)
+                thing = thingLoader.loadThing(thingData, self.service.toAbsoluteMediaUrl)
                 level.pool.addThing(thing)
             level.things.append(thing)
 
