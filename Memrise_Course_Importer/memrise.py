@@ -562,7 +562,7 @@ class CourseLoader(object):
         course = Course(courseId)
         
         courseData = self.service.loadCourseData(course.id)
-        
+
         course.title = sanitizeName(courseData["session"]["course"]["name"], u"Course")
         course.description = courseData["session"]["course"]["description"]
         course.source = courseData["session"]["course"]["source"]["name"]
@@ -788,8 +788,17 @@ class Service(object):
         courseUrl = self.getHtmlCourseUrl(courseId)
         response = self.openWithRetry(courseUrl)
         soup = BeautifulSoup.BeautifulSoup(response.read())
-        levelNums = [int(tag.string) for tag in soup.findAll('div', {'class': 'level-index'})]
-        levelCount = max(levelNums) if len(levelNums) > 0 else 0
+
+        levelCount = 0
+        if soup.findAll('div', {'class': lambda x: x and 'levels' in x.split()}):
+	    levelNums = [int(tag.string) for tag in soup.findAll('div', {'class': 'level-index'})]
+            if len(levelNums) > 0:
+                levelCount = max(levelNums)
+        elif soup.findAll('div', {'class': lambda x: x and 'things' in x.split()}):
+            levelCount = 1
+
+        if levelCount == 0:
+            raise MemriseError("Can't get level count")
 
         for levelIndex in range(1,levelCount+1):
             try:
