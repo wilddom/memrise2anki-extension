@@ -845,7 +845,7 @@ class Service(object):
                         return memData
             else:
                 raise
-        raise MemNotFoundError(memId)
+        raise MemNotFoundError("Mem not found (memId={}, thingId={}, learnableId={}, colA={}, colB={})".format(memId, thingId, learnableId, colA, colB))
 
     @staticmethod
     def getCourseIdFromUrl(url):
