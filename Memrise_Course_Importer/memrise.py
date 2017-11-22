@@ -678,8 +678,11 @@ class CourseLoader(object):
                 userData = thingusers[thing.id]
                 level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
                 if userData["mem_id"] and not level.pool.mems.has(level.direction, thing):
-                    memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], int(userData["learnable_id"]), userData["column_a"], userData["column_b"])
-                    level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
+                    try:
+                        memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], int(userData["learnable_id"]), userData["column_a"], userData["column_b"])
+                        level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
+                    except MemNotFoundError:
+                        pass
 
             if thing.id in self.directionThing.get(level.direction, {}):
                 self.thingCount += 1
