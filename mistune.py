@@ -5,13 +5,13 @@
 
     The fastest markdown parser in pure Python with renderer feature.
 
-    :copyright: (c) 2014 - 2017 by Hsiaoming Yang.
+    :copyright: (c) 2014 - 2018 by Hsiaoming Yang.
 """
 
 import re
 import inspect
 
-__version__ = '0.8.1'
+__version__ = '0.8.4'
 __author__ = 'Hsiaoming Yang <me@lepture.com>'
 __all__ = [
     'BlockGrammar', 'BlockLexer',
@@ -35,7 +35,7 @@ _inline_tags = [
 ]
 _pre_tags = ['pre', 'script', 'style']
 _valid_end = r'(?!:/|[^\w\s@]*@)\b'
-_valid_attr = r'''\s*[a-zA-Z\-](?:\=(?:"[^"]*"|'[^']*'|[^\s'">]+))?'''
+_valid_attr = r'''\s*[a-zA-Z\-](?:\s*\=\s*(?:"[^"]*"|'[^']*'|[^\s'">]+))?'''
 _block_tag = r'(?!(?:%s)\b)\w+%s' % ('|'.join(_inline_tags), _valid_end)
 _scheme_blacklist = ('javascript:', 'vbscript:')
 
@@ -109,20 +109,21 @@ class BlockGrammar(object):
     newline = re.compile(r'^\n+')
     block_code = re.compile(r'^( {4}[^\n]+\n*)+')
     fences = re.compile(
-        r'^ *(`{3,}|~{3,}) *(\S+)? *\n'  # ```lang
-        r'([\s\S]+?)\s*'
-        r'\1 *(?:\n+|$)'  # ```
+        r'^( *)(`{3,}|~{3,}) *([^`\s]+)? *\n'  # ```lang
+        r'([\s\S]*?)\n'
+        r'\1\2 *(?:\n+|$)',  # ```
     )
     hrule = re.compile(r'^ {0,3}[-*_](?: *[-*_]){2,} *(?:\n+|$)')
     heading = re.compile(r'^ *(#{1,6}) *([^\n]+?) *#* *(?:\n+|$)')
     lheading = re.compile(r'^([^\n]+)\n *(=|-)+ *(?:\n+|$)')
     block_quote = re.compile(r'^( *>[^\n]+(\n[^\n]+)*\n*)+')
     list_block = re.compile(
-        r'^( *)([*+-]|\d+\.) [\s\S]+?'
+        r'^( *)(?=[*+-]|\d+\.)(([*+-])?(?:\d+\.)?) [\s\S]+?'
         r'(?:'
         r'\n+(?=\1?(?:[-*_] *){3,}(?:\n+|$))'  # hrule
         r'|\n+(?=%s)'  # def links
-        r'|\n+(?=%s)'  # def footnotes
+        r'|\n+(?=%s)'  # def footnotes\
+        r'|\n+(?=\1(?(3)\d+\.|[*+-]) )'   # heterogeneous bullet
         r'|\n{2,}'
         r'(?! )'
         r'(?!\1(?:[*+-]|\d+\.) )\n*'
@@ -142,7 +143,7 @@ class BlockGrammar(object):
         r'^((?:[^\n]+\n?(?!'
         r'%s|%s|%s|%s|%s|%s|%s|%s|%s'
         r'))+)\n*' % (
-            _pure_pattern(fences).replace(r'\1', r'\2'),
+            _pure_pattern(fences).replace(r'\2', r'\3').replace(r'\1', r'\2'),
             _pure_pattern(list_block).replace(r'\1', r'\3'),
             _pure_pattern(hrule),
             _pure_pattern(heading),
@@ -200,6 +201,10 @@ class BlockLexer(object):
             rules = self.grammar_class()
 
         self.rules = rules
+        self._max_recursive_depth = kwargs.get('max_recursive_depth', 6)
+        self._list_depth = 0
+        self._blockquote_depth = 0
+        self.default_rules = self.default_rules[:]
 
     def __call__(self, text, rules=None):
         return self.parse(text, rules)
@@ -246,8 +251,8 @@ class BlockLexer(object):
     def parse_fences(self, m):
         self.tokens.append({
             'type': 'code',
-            'lang': m.group(2),
-            'text': m.group(3),
+            'lang': m.group(3),
+            'text': m.group(4),
         })
 
     def parse_heading(self, m):
@@ -274,9 +279,16 @@ class BlockLexer(object):
             'type': 'list_start',
             'ordered': '.' in bull,
         })
-        cap = m.group(0)
-        self._process_list_item(cap, bull)
+        self._list_depth += 1
+        if self._list_depth > self._max_recursive_depth:
+            self.tokens.append({'type': 'list_item_start'})
+            self.parse_text(m)
+            self.tokens.append({'type': 'list_item_end'})
+        else:
+            cap = m.group(0)
+            self._process_list_item(cap, bull)
         self.tokens.append({'type': 'list_end'})
+        self._list_depth -= 1
 
     def _process_list_item(self, cap, bull):
         cap = self.rules.list_item.findall(cap)
@@ -320,10 +332,15 @@ class BlockLexer(object):
 
     def parse_block_quote(self, m):
         self.tokens.append({'type': 'block_quote_start'})
-        # clean leading >
-        cap = _block_quote_leading_pattern.sub('', m.group(0))
-        self.parse(cap)
+        self._blockquote_depth += 1
+        if self._blockquote_depth > self._max_recursive_depth:
+            self.parse_text(m)
+        else:
+            # clean leading >
+            cap = _block_quote_leading_pattern.sub('', m.group(0))
+            self.parse(cap)
         self.tokens.append({'type': 'block_quote_end'})
+        self._blockquote_depth -= 1
 
     def parse_def_links(self, m):
         key = _keyify(m.group(1))
@@ -373,9 +390,9 @@ class BlockLexer(object):
         cells = cells.split('\n')
         for i, v in enumerate(cells):
             v = re.sub(r'^ *\| *| *\| *$', '', v)
-            cells[i] = re.split(r' *\| *', v)
+            cells[i] = re.split(r' *(?<!\\)\| *', v)
 
-        item['cells'] = cells
+        item['cells'] = self._process_cells(cells)
         self.tokens.append(item)
 
     def parse_nptable(self, m):
@@ -384,9 +401,9 @@ class BlockLexer(object):
         cells = re.sub(r'\n$', '', m.group(3))
         cells = cells.split('\n')
         for i, v in enumerate(cells):
-            cells[i] = re.split(r' *\| *', v)
+            cells[i] = re.split(r' *(?<!\\)\| *', v)
 
-        item['cells'] = cells
+        item['cells'] = self._process_cells(cells)
         self.tokens.append(item)
 
     def _process_table(self, m):
@@ -411,6 +428,14 @@ class BlockLexer(object):
             'align': align,
         }
         return item
+
+    def _process_cells(self, cells):
+        for i, line in enumerate(cells):
+            for c, cell in enumerate(line):
+                # de-escape any pipe inside the cell here
+                cells[i][c] = re.sub('\\\\\|', '|', cell)
+
+        return cells
 
     def parse_block_html(self, m):
         tag = m.group(1)
@@ -503,7 +528,7 @@ class InlineLexer(object):
         'linebreak', 'strikethrough', 'text',
     ]
     inline_html_rules = [
-        'escape', 'autolink', 'url', 'link', 'reflink',
+        'escape', 'inline_html', 'autolink', 'url', 'link', 'reflink',
         'nolink', 'double_emphasis', 'emphasis', 'code',
         'linebreak', 'strikethrough', 'text',
     ]
@@ -526,6 +551,8 @@ class InlineLexer(object):
         self._in_link = False
         self._in_footnote = False
         self._parse_inline_html = kwargs.get('parse_inline_html')
+        self.default_rules = self.default_rules[:]
+        self.inline_html_rules = self.inline_html_rules[:]
 
     def __call__(self, text, rules=None):
         return self.output(text, rules)
