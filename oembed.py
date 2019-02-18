@@ -1,8 +1,8 @@
-import json, urllib, urllib2
+import json, urllib.request, urllib.parse
 
 def loadEmbedCode(url):
     serviceUrl = "http://noembed.com/embed"
-    response = urllib2.urlopen(serviceUrl, urllib.urlencode({'url': url}))
+    response = urllib.request.urlopen(serviceUrl, urllib.parse.urlencode({'url': url}))
     data = json.load(response)
     if "error" in data:
         return None

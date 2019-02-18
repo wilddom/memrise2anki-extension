@@ -1,5 +1,5 @@
 import re, copy
-import mistune
+from . import mistune
 
 class MemriseRenderer(mistune.Renderer):
     def __init__(self, capture_images=None, *args, **kwargs):

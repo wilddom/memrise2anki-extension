@@ -1,15 +1,15 @@
 ﻿# -*- coding: utf-8 -*-
 
-import memrise, cookielib, os.path, uuid, sys, datetime, re
-import BeautifulSoup
+import http.cookiejar, os.path, uuid, sys, datetime, re
+import bs4
 from anki.media import MediaManager
 from aqt import mw
 from aqt.qt import *
 from functools import partial
-import oembed
+from . import memrise, oembed
 
 def camelize(content):
-	return u''.join(x for x in content.title() if x.isalpha())
+	return ''.join(x for x in content.title() if x.isalpha())
 
 class MemriseCourseLoader(QObject):
 	totalCountChanged = pyqtSignal(int)
@@ -44,26 +44,26 @@ class MemriseCourseLoader(QObject):
 			
 		def downloadMedia(self, thing):
 			for colName in thing.pool.getImageColumnNames():
-				for image in filter(lambda f: not f.isDownloaded(), thing.getImageFiles(colName)):
+				for image in [f for f in thing.getImageFiles(colName) if not f.isDownloaded()]:
 					image.localUrl = self.sender.download(image.remoteUrl)
 			for colName in thing.pool.getAudioColumnNames():
-				for audio in filter(lambda f: not f.isDownloaded(), thing.getAudioFiles(colName)):
+				for audio in [f for f in thing.getAudioFiles(colName) if not f.isDownloaded()]:
 					audio.localUrl = self.sender.download(audio.remoteUrl)
 		
 		def downloadMems(self, thing):
-			for mem in thing.pool.mems.getMems(thing).values():
-				for image in filter(lambda f: not f.isDownloaded(), mem.images):
+			for mem in list(thing.pool.mems.getMems(thing).values()):
+				for image in [f for f in mem.images if not f.isDownloaded()]:
 					image.localUrl = self.sender.download(image.remoteUrl)
 					if image.isDownloaded():
 						mem.text = mem.text.replace(image.remoteUrl, image.localUrl)
 				
 				if self.sender.embedMemsOnlineMedia:
-					soup = BeautifulSoup.BeautifulSoup(mem.text)
-					for link in soup.findAll("a", {"class": "embed"}):
+					soup = bs4.BeautifulSoup(mem.text)
+					for link in soup.find_all("a", {"class": "embed"}):
 						embedCode = oembed.loadEmbedCode(link.get("href"))
 						if embedCode:
-							link.replaceWith(BeautifulSoup.BeautifulSoup(embedCode))
-							mem.text = unicode(soup)
+							link.replaceWith(bs4.BeautifulSoup(embedCode))
+							mem.text = str(soup)
 			
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
@@ -104,11 +104,11 @@ class MemriseCourseLoader(QObject):
 		self.askerFunction = None
 	
 	def download(self, url):
-		import urllib2
+		import urllib.request, urllib.error, urllib.parse
 		while True:
 			try:
 				return self.memriseService.downloadMedia(url, skipExisting=self.skipExistingMedia)
-			except (urllib2.HTTPError, urllib2.URLError) as e:
+			except (urllib.error.HTTPError, urllib.error.URLError) as e:
 				if callable(self.askerFunction) and hasattr(self.askerFunction, '__self__'):
 					action = QMetaObject.invokeMethod(self.askerFunction.__self__, self.askerFunction.__name__, Qt.BlockingQueuedConnection, Q_RETURN_ARG(str), Q_ARG(str, url), Q_ARG(str, str(e)), Q_ARG(str, url))
 					if action == "ignore":
@@ -261,23 +261,23 @@ class ModelMappingDialog(QDialog):
 	def __createTemplate(t, pool, front, back, withMem):
 		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
 		
-		t['qfmt'] = u"{{"+front+u"}}\n"
+		t['qfmt'] = "{{"+front+"}}\n"
 		if front in pool.getTextColumnNames():
-			frontAlternatives = u"{} {}".format(front, _("Alternatives"))
-			t['qfmt'] += u"{{#"+frontAlternatives+u"}}<br /><span class=\"alts\">{{"+frontAlternatives+u"}}</span>{{/"+frontAlternatives+u"}}\n"
+			frontAlternatives = "{} {}".format(front, _("Alternatives"))
+			t['qfmt'] += "{{#"+frontAlternatives+"}}<br /><span class=\"alts\">{{"+frontAlternatives+"}}</span>{{/"+frontAlternatives+"}}\n"
 		
 		for colName in filter(notFrontBack, pool.getTextColumnNames()):
-			t['qfmt'] += u"<br />{{"+colName+u"}}\n"
-			altColName = u"{} {}".format(colName, _("Alternatives"))
-			t['qfmt'] += u"{{#"+altColName+u"}}<br /><span class=\"alts\">{{"+altColName+u"}}</span>{{/"+altColName+u"}}\n"
+			t['qfmt'] += "<br />{{"+colName+"}}\n"
+			altColName = "{} {}".format(colName, _("Alternatives"))
+			t['qfmt'] += "{{#"+altColName+"}}<br /><span class=\"alts\">{{"+altColName+"}}</span>{{/"+altColName+"}}\n"
 		
 		for attrName in filter(notFrontBack, pool.getAttributeNames()):
-			t['qfmt'] += u"{{#"+attrName+u"}}<br /><span class=\"attrs\">({{"+attrName+u"}})</span>{{/"+attrName+"}}\n"
+			t['qfmt'] += "{{#"+attrName+"}}<br /><span class=\"attrs\">({{"+attrName+"}})</span>{{/"+attrName+"}}\n"
 		
-		t['afmt'] = u"{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+u"{{"+back+u"}}\n"
+		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+back+"}}\n"
 		if back in pool.getTextColumnNames():
-			backAlternatives = u"{} {}".format(back, _("Alternatives"))
-			t['afmt'] += u"{{#"+backAlternatives+u"}}<br /><span class=\"alts\">{{"+backAlternatives+u"}}</span>{{/"+backAlternatives+u"}}\n"
+			backAlternatives = "{} {}".format(back, _("Alternatives"))
+			t['afmt'] += "{{#"+backAlternatives+"}}<br /><span class=\"alts\">{{"+backAlternatives+"}}</span>{{/"+backAlternatives+"}}\n"
 		
 		if front == pool.getTextColumnName(0):
 			imageside = 'afmt'
@@ -287,31 +287,31 @@ class ModelMappingDialog(QDialog):
 			audioside = 'afmt'
 			
 		for colName in filter(notFrontBack, pool.getImageColumnNames()):
-			t[imageside] += u"{{#"+colName+u"}}<br />{{"+colName+u"}}{{/"+colName+"}}\n"
+			t[imageside] += "{{#"+colName+"}}<br />{{"+colName+"}}{{/"+colName+"}}\n"
 		
 		for colName in filter(notFrontBack, pool.getAudioColumnNames()):
-			t[audioside] += u"{{#"+colName+u"}}<div style=\"display:none;\">{{"+colName+u"}}</div>{{/"+colName+"}}\n"
+			t[audioside] += "{{#"+colName+"}}<div style=\"display:none;\">{{"+colName+"}}</div>{{/"+colName+"}}\n"
 		
 		if withMem:
-			memField = u"{} -> {} {}".format(front, back, _("Mem"))
-			t['afmt'] += u"{{#"+memField+u"}}<br />{{"+memField+u"}}{{/"+memField+"}}\n"
+			memField = "{} -> {} {}".format(front, back, _("Mem"))
+			t['afmt'] += "{{#"+memField+"}}<br />{{"+memField+"}}{{/"+memField+"}}\n"
 		
 		return t
 	
 	def __createMemriseModel(self, course, pool):
 		mm = self.col.models
 				
-		name = u"Memrise - {} - {}".format(course.title, pool.name)
+		name = "Memrise - {} - {}".format(course.title, pool.name)
 		m = mm.new(name)
 		
 		for colName in pool.getTextColumnNames():
 			dfm = mm.newField(colName)
 			mm.addField(m, dfm)
-			afm = mm.newField(u"{} {}".format(colName, _("Alternatives")))
+			afm = mm.newField("{} {}".format(colName, _("Alternatives")))
 			mm.addField(m, afm)
-			hafm = mm.newField(u"{} {}".format(colName, _("Hidden Alternatives")))
+			hafm = mm.newField("{} {}".format(colName, _("Hidden Alternatives")))
 			mm.addField(m, hafm)
-			tcfm = mm.newField(u"{} {}".format(colName, _("Typing Corrects")))
+			tcfm = mm.newField("{} {}".format(colName, _("Typing Corrects")))
 			mm.addField(m, tcfm)
 		
 		for attrName in pool.getAttributeNames():
@@ -328,7 +328,7 @@ class ModelMappingDialog(QDialog):
 		
 		if self.memsEnabled:
 			for direction in pool.mems.getDirections():
-				fm = mm.newField(u"{} -> {} {}".format(direction.front, direction.back, _("Mem")))
+				fm = mm.newField("{} -> {} {}".format(direction.front, direction.back, _("Mem")))
 				mm.addField(m, fm)
 		
 		fm = mm.newField(_("Level"))
@@ -341,7 +341,7 @@ class ModelMappingDialog(QDialog):
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
 		
 		for direction in pool.directions:
-			t = mm.newTemplate(unicode(direction))
+			t = mm.newTemplate(str(direction))
 			self.__createTemplate(t, pool, direction.front, direction.back, self.memsEnabled and direction in pool.mems.getDirections())
 			mm.addTemplate(m, t)
 		
@@ -355,7 +355,7 @@ class ModelMappingDialog(QDialog):
 			if self.col.models.scmhash(modelStored) == self.col.models.scmhash(model):
 				model = modelStored
 			else:
-				model['name'] += u" ({})".format(uuid.uuid4())
+				model['name'] += " ({})".format(str(uuid.uuid4()))
 			
 		if deck and 'mid' in deck:
 			deckModel = self.col.models.get(deck['mid'])
@@ -428,7 +428,7 @@ class TemplateMappingDialog(QDialog):
 	
 	@staticmethod
 	def getFirst(values):
-		return values[0] if 0 < len(values) else u''
+		return values[0] if 0 < len(values) else ''
 	
 	def reject(self):
 		# prevent close on ESC
@@ -440,7 +440,7 @@ class TemplateMappingDialog(QDialog):
 			return self.templates[model['id']][direction]
 		
 		for template in model['tmpls']:
-			if template['name'] == unicode(direction):
+			if template['name'] == str(direction):
 				self.templates.setdefault(model['id'], {})[direction] = template
 				return template
 
@@ -544,7 +544,7 @@ class FieldMappingDialog(QDialog):
 
 	def __createModelFieldSelection(self, fieldNames):
 		fieldSelection = QComboBox()
-		fieldSelection.addItem(u"--- None ---")
+		fieldSelection.addItem("--- None ---")
 		fieldSelection.insertSeparator(1)
 		for fieldName in fieldNames:
 			fieldSelection.addItem(fieldName)
@@ -552,27 +552,27 @@ class FieldMappingDialog(QDialog):
 
 	def __createMemriseFieldSelection(self, pool):
 		fieldSelection = QComboBox()
-		fieldSelection.addItem(u"--- None ---")
+		fieldSelection.addItem("--- None ---")
 		fieldSelection.insertSeparator(1)
 		for column in pool.getTextColumns():
-			fieldSelection.addItem(u"Text: {}".format(column.name),
+			fieldSelection.addItem("Text: {}".format(column.name),
 								FieldHelper(column, memrise.Thing.getDefinitions))
-			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Alternatives")),
-								FieldHelper(column, memrise.Thing.getAlternatives, u"{} {}".format(column.name, _("Alternatives"))))
-			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Hidden Alternatives")),
-								FieldHelper(column, memrise.Thing.getHiddenAlternatives, u"{} {}".format(column.name, _("Hidden Alternatives"))))
-			fieldSelection.addItem(u"{1}: {0}".format(column.name, _("Typing Corrects")),
-								FieldHelper(column, memrise.Thing.getTypingCorrects, u"{} {}".format(column.name, _("Typing Corrects"))))
+			fieldSelection.addItem("{1}: {0}".format(column.name, _("Alternatives")),
+								FieldHelper(column, memrise.Thing.getAlternatives, "{} {}".format(column.name, _("Alternatives"))))
+			fieldSelection.addItem("{1}: {0}".format(column.name, _("Hidden Alternatives")),
+								FieldHelper(column, memrise.Thing.getHiddenAlternatives, "{} {}".format(column.name, _("Hidden Alternatives"))))
+			fieldSelection.addItem("{1}: {0}".format(column.name, _("Typing Corrects")),
+								FieldHelper(column, memrise.Thing.getTypingCorrects, "{} {}".format(column.name, _("Typing Corrects"))))
 		for column in pool.getImageColumns():
-			fieldSelection.addItem(u"Image: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalImageUrls))
+			fieldSelection.addItem("Image: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalImageUrls))
 		for column in pool.getAudioColumns():
-			fieldSelection.addItem(u"Audio: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalAudioUrls))
+			fieldSelection.addItem("Audio: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalAudioUrls))
 		for attribute in pool.getAttributes():
-			fieldSelection.addItem(u"Attribute: {}".format(attribute.name), FieldHelper(attribute, memrise.Thing.getAttributes))
+			fieldSelection.addItem("Attribute: {}".format(attribute.name), FieldHelper(attribute, memrise.Thing.getAttributes))
 		if self.memsEnabled:
 			for direction in pool.mems.getDirections():
-				fieldSelection.addItem(u"Mem: {} -> {}".format(direction.front, direction.back),
-									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), u"{} -> {} {}".format(direction.front, direction.back, _("Mem"))))
+				fieldSelection.addItem("Mem: {} -> {}".format(direction.front, direction.back),
+									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), "{} -> {} {}".format(direction.front, direction.back, _("Mem"))))
 			
 		return fieldSelection
 
@@ -586,7 +586,7 @@ class FieldMappingDialog(QDialog):
 		self.grid.addWidget(label1, 0, 0)
 		self.grid.addWidget(label2, 0, 1)
 				
-		fieldNames = filter(lambda fieldName: not fieldName in [_('Thing'), _('Level')], self.col.models.fieldNames(model))
+		fieldNames = [fieldName for fieldName in self.col.models.fieldNames(model) if not fieldName in [_('Thing'), _('Level')]]
 		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
 		if self.memsEnabled:
 			poolFieldCount += pool.mems.countDirections()
@@ -619,7 +619,7 @@ class FieldMappingDialog(QDialog):
 			if model['id'] in self.mappings[pool.id]:
 				return self.mappings[pool.id][model['id']]
 		
-		self.label.setText(u'Define the field mapping for the note type "{}".'.format(model["name"]))
+		self.label.setText('Define the field mapping for the note type "{}".'.format(model["name"]))
 		selectionMapping = self.__buildGrid(pool, model)
 		self.exec_()
 		
@@ -745,17 +745,17 @@ class MemriseImportDialog(QDialog):
 		self.templateMapper = TemplateMappingDialog(mw.col)
 	
 	def prepareTitleTag(self, tag):
-		value = u''.join(x for x in tag.title() if x.isalnum())
+		value = ''.join(x for x in tag.title() if x.isalnum())
 		if value.isdigit():
 			return ''
 		return value
 	
 	def prepareLevelTag(self, levelNum, width):
-		formatstr = u"Level{:0"+unicode(width)+"d}"
+		formatstr = "Level{:0"+str(width)+"d}"
 		return formatstr.format(levelNum)
 	
 	def getLevelTags(self, levelCount, level):
-		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(unicode(levelCount))))]
+		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(str(levelCount))))]
 		titleTag = self.prepareTitleTag(level.title)
 		if titleTag:
 			tags.append(titleTag)
@@ -763,21 +763,21 @@ class MemriseImportDialog(QDialog):
 		
 	@staticmethod
 	def prepareText(content):
-		return u'{:s}'.format(content.strip())
+		return '{:s}'.format(content.strip())
 	
 	@staticmethod
 	def prepareAudio(content):
-		return u'[sound:{:s}]'.format(content)
+		return '[sound:{:s}]'.format(content)
 	
 	@staticmethod
 	def prepareImage(content):
-		return u'<img src="{:s}">'.format(content)
+		return '<img src="{:s}">'.format(content)
 	
 	def selectDeck(self, name, merge=False):
 		did = mw.col.decks.id(name, create=False)
 		if not merge:
 			if did:
-				did = mw.col.decks.id(u"{}-{}".format(name, uuid.uuid4()))
+				did = mw.col.decks.id("{}-{}".format(name, str(uuid.uuid4())))
 			else:
 				did = mw.col.decks.id(name, create=True)
 		
@@ -804,7 +804,7 @@ class MemriseImportDialog(QDialog):
 		mw.col.models.save(model)
 	
 	def findExistingNote(self, deckName, course, thing):
-		notes = mw.col.findNotes(u'deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
+		notes = mw.col.findNotes('deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
 		if notes:
 			return mw.col.getNote(notes[0])
 			
@@ -813,11 +813,11 @@ class MemriseImportDialog(QDialog):
 	def getWithSpec(self, thing, spec):
 		values = spec.get(thing)
 		if spec.field.type == memrise.Field.Text:
-			return map(self.prepareText, values)
+			return list(map(self.prepareText, values))
 		elif spec.field.type == memrise.Field.Image:
-			return map(self.prepareImage, filter(bool, values))
+			return list(map(self.prepareImage, list(filter(bool, values))))
 		elif spec.field.type == memrise.Field.Audio:
-			return map(self.prepareAudio, filter(bool, values))
+			return list(map(self.prepareAudio, list(filter(bool, values))))
 		elif spec.field.type == memrise.Field.Mem:
 			return self.prepareText(values.get())
 						
@@ -826,7 +826,7 @@ class MemriseImportDialog(QDialog):
 	@staticmethod
 	def toList(values):
 		if hasattr(values, '__iter__'):
-			return filter(None, values)
+			return [_f for _f in values if _f]
 		elif values:
 			return [values]
 		else:
@@ -837,7 +837,7 @@ class MemriseImportDialog(QDialog):
 			self.buttons.show()
 			self.progressBar.hide()
 			exc_info = self.loader.getExceptionInfo()
-			raise exc_info[0], exc_info[1], exc_info[2]
+			raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
 		
 		try:
 			self.progressBar.setValue(0)
@@ -870,19 +870,19 @@ class MemriseImportDialog(QDialog):
 						ankiNote = mw.col.newNote()
 					
 					mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
-					for field, data in mapping.iteritems():
+					for field, data in list(mapping.items()):
 						values = []
 						for spec in data:
 							values.extend(self.toList(self.getWithSpec(thing, spec)))
-						ankiNote[field] = u", ".join(values)
+						ankiNote[field] = ", ".join(values)
 	
-					if _('Level') in ankiNote.keys():
-						levels = set(filter(bool, map(unicode.strip, ankiNote[_('Level')].split(u','))))
-						levels.add(unicode(level.index))
-						ankiNote[_('Level')] = u', '.join(sorted(levels))
+					if _('Level') in list(ankiNote.keys()):
+						levels = set(filter(bool, list(map(str.strip, ankiNote[_('Level')].split(',')))))
+						levels.add(str(level.index))
+						ankiNote[_('Level')] = ', '.join(sorted(levels))
 					
-					if _('Thing') in ankiNote.keys():
-						ankiNote[_('Thing')] = unicode(thing.id)
+					if _('Thing') in list(ankiNote.keys()):
+						ankiNote[_('Thing')] = str(thing.id)
 					
 					for tag in tags:
 						ankiNote.addTag(tag)
@@ -905,7 +905,7 @@ class MemriseImportDialog(QDialog):
 									card.ivl = 0
 									card.reps = 0
 									card.lapses = 0
-                                                                        card.due = scheduleInfo.position
+									card.due = scheduleInfo.position
 									card.factor = 0
 								else:
 									card.type = 2
@@ -931,7 +931,7 @@ class MemriseImportDialog(QDialog):
 			self.buttons.show()
 			self.progressBar.hide()
 			exc_info = sys.exc_info()
-			raise exc_info[0], exc_info[1], exc_info[2]
+			raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
 		
 		mw.col.reset()
 		mw.reset()
@@ -961,7 +961,7 @@ class MemriseImportDialog(QDialog):
 def startCourseImporter():
 	downloadDirectory = MediaManager(mw.col, None).dir()
 	cookiefilename = os.path.join(mw.pm.profileFolder(), 'memrise.cookies')
-	cookiejar = cookielib.MozillaCookieJar(cookiefilename)
+	cookiejar = http.cookiejar.MozillaCookieJar(cookiefilename)
 	if os.path.isfile(cookiefilename):
 		cookiejar.load()
 	memriseService = memrise.Service(downloadDirectory, cookiejar)
@@ -971,6 +971,5 @@ def startCourseImporter():
 		memriseCourseImporter.exec_()
 
 action = QAction("Import Memrise Course...", mw)
-mw.connect(action, SIGNAL("triggered()"), startCourseImporter)
+action.triggered.connect(startCourseImporter)
 mw.form.menuTools.addAction(action)
-
