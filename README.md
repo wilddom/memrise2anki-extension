@@ -1,7 +1,7 @@
 memrise2anki-extension
 ======================
 
-An extension for Anki 2 that downloads and converts a course from Memrise into an Anki deck.
+An extension for Anki 2.1 that downloads and converts a course from Memrise into an Anki deck.
 
 How to install
 --------------
@@ -12,20 +12,12 @@ How to install
 2. Enter code: `deleted`
 3. Restart Anki
 
-### AnkiHub
-
-1. Go to Tools -> Add-Ons -> Browse & Install...
-2. Enter code: 116826216
-3. Restart Anki
-4. Go to Tools -> Add-Ons -> From GitHub
-5. Enter the GitHub path (e.g. wilddom/memrise2anki-extension)
-
 ### Manually
 
-1. Download the ZIP-File from github
+1. Download the ZIP-file from github
 2. Open Anki
 3. Click on Tools -> Add-ons -> Open Add-ons Folder...
-4. Extract the ZIP-File (content of memrise2anki-extension-master) in that folder
+4. Extract the ZIP-file into this directory
 5. Restart Anki
 
 
