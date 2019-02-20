@@ -8,17 +8,20 @@ How to install
 
 ### Add-On
 
-1. Go to Tools -> Add-Ons -> Browse & Install...
-2. Enter code: `deleted`
-3. Restart Anki
+1. Go to Tools -> Add-ons
+2. Click on Get Add-ons
+3. Enter code: `deleted`
+4. Restart Anki
 
 ### Manually
 
 1. Download the ZIP-file from github
 2. Open Anki
-3. Click on Tools -> Add-ons -> Open Add-ons Folder...
-4. Extract the ZIP-file into this directory
-5. Restart Anki
+3. Go to Tools -> Add-ons
+4. Make sure no Add-on is selected
+5. Click on View Files
+6. Extract the ZIP-file into this directory
+7. Restart Anki
 
 
 Note type
