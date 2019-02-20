@@ -1,6 +1,7 @@
 import urllib.request, urllib.error, urllib.parse, http.cookiejar, urllib.request, urllib.parse, urllib.error, http.client, urllib.parse
 import re, time, os.path, json, collections, datetime, calendar, functools, uuid
-import bs4, markdown
+import bs4
+from . import memrise_markdown
 
 def utcToLocal(utcDt):
     # get integer timestamp to avoid precision lost
@@ -626,7 +627,7 @@ class CourseLoader(object):
         text = memData['text']
         if memData['image_output_url']:
             text = "img:{}".format(memData['image_output_url'])
-        mem.text, remoteImageUrls = markdown.convertAndReturnImages(text)
+        mem.text, remoteImageUrls = memrise_markdown.convertAndReturnImages(text)
         mem.images.extend(list(map(DownloadableFile, list(map(fixUrl, remoteImageUrls)))))
         for before, after in zip(remoteImageUrls, [im.remoteUrl for im in mem.images]):
             if after != before:
