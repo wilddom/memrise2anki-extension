@@ -4,11 +4,8 @@ import bs4
 from . import memrise_markdown
 
 def utcToLocal(utcDt):
-    # get integer timestamp to avoid precision lost
-    timestamp = calendar.timegm(utcDt.timetuple())
-    localDt = datetime.datetime.fromtimestamp(timestamp)
-    assert utcDt.resolution >= datetime.timedelta(microseconds=1)
-    return localDt.replace(microsecond=utcDt.microsecond)
+    offset = datetime.datetime.fromtimestamp(86400)-datetime.datetime.utcfromtimestamp(86400)
+    return utcDt+offset
 
 def sanitizeName(name, default=""):
     name = re.sub("<.*?>", "", name)
