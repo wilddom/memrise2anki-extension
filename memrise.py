@@ -776,7 +776,13 @@ class Service(object):
         fields['username'] = username
         fields['password'] = password
         request2 = urllib.request.Request(response1.geturl(), urllib.parse.urlencode(fields).encode("utf-8"), {'Referer': response1.geturl()})
-        response2 = self.openWithRetry(request2)
+        try:
+            response2 = self.openWithRetry(request2)
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                return False
+            else:
+                raise
         return bool(re.match('https?://www.memrise.com/home/', response2.geturl()))
     
     def loadCourse(self, url, observer=None):
