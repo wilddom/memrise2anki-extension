@@ -57,7 +57,7 @@ class Direction(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __unicode__(self):
+    def __str__(self):
         return "{} -> {}".format(self.front, self.back)
 
 class Schedule(object):
