@@ -819,12 +819,14 @@ class MemriseImportDialog(QDialog):
 		elif spec.field.type == memrise.Field.Audio:
 			return list(map(self.prepareAudio, list(filter(bool, values))))
 		elif spec.field.type == memrise.Field.Mem:
-			return self.prepareText(values.get())
+			return [self.prepareText(values.get())]
 						
 		return None
 	
 	@staticmethod
 	def toList(values):
+		if isinstance(values, str):
+			return [values]
 		if hasattr(values, '__iter__'):
 			return [_f for _f in values if _f]
 		elif values:
