@@ -529,7 +529,7 @@ class ThingLoader(object):
     @staticmethod
     def __getUrls(cell):
         data = []
-        for value in cell.get("val", ""):
+        for value in cell.get("val", []):
             url = value.get("url", "")
             if url:
                 data.append(url)
