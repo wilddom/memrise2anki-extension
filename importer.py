@@ -3,6 +3,7 @@
 import http.cookiejar, os.path, uuid, sys, datetime, re
 import bs4
 from anki.media import MediaManager
+from anki.lang import _
 from aqt import mw
 from aqt.qt import *
 from functools import partial
