@@ -63,7 +63,7 @@ class MemriseCourseLoader(QObject):
 					for link in soup.find_all("a", {"class": "embed"}):
 						embedCode = oembed.loadEmbedCode(link.get("href"))
 						if embedCode:
-							link.replaceWith(bs4.BeautifulSoup(embedCode))
+							link.replaceWith(bs4.BeautifulSoup(embedCode, "html.parser"))
 							mem.text = str(soup)
 			
 		def thingLoaded(self, thing):
