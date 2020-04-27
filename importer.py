@@ -59,11 +59,11 @@ class MemriseCourseLoader(QObject):
 						mem.text = mem.text.replace(image.remoteUrl, image.localUrl)
 				
 				if self.sender.embedMemsOnlineMedia:
-					soup = bs4.BeautifulSoup(mem.text)
+					soup = bs4.BeautifulSoup(mem.text, 'html.parser')
 					for link in soup.find_all("a", {"class": "embed"}):
 						embedCode = oembed.loadEmbedCode(link.get("href"))
 						if embedCode:
-							link.replaceWith(bs4.BeautifulSoup(embedCode))
+							link.replaceWith(bs4.BeautifulSoup(embedCode, "html.parser"))
 							mem.text = str(soup)
 			
 		def thingLoaded(self, thing):
@@ -103,6 +103,7 @@ class MemriseCourseLoader(QObject):
 		self.downloadMems = True
 		self.embedMemsOnlineMedia = False
 		self.askerFunction = None
+		self.ignoreDownloadErrors = False
 	
 	def download(self, url):
 		import urllib.request, urllib.error, urllib.parse
@@ -110,6 +111,8 @@ class MemriseCourseLoader(QObject):
 			try:
 				return self.memriseService.downloadMedia(url, skipExisting=self.skipExistingMedia)
 			except (urllib.error.HTTPError, urllib.error.URLError) as e:
+				if self.ignoreDownloadErrors:
+					return None
 				if callable(self.askerFunction) and hasattr(self.askerFunction, '__self__'):
 					action = QMetaObject.invokeMethod(self.askerFunction.__self__, self.askerFunction.__name__, Qt.BlockingQueuedConnection, Q_RETURN_ARG(str), Q_ARG(str, url), Q_ARG(str, str(e)), Q_ARG(str, url))
 					if action == "ignore":
@@ -714,6 +717,9 @@ class MemriseImportDialog(QDialog):
 		self.downloadMediaCheckBox.setChecked(True)
 		self.skipExistingMediaCheckBox.setChecked(True)
 
+		self.ignoreDownloadErrorsCheckBox = QCheckBox("Ignore download errors")
+		layout.addWidget(self.ignoreDownloadErrorsCheckBox)
+
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
 		
 		self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
@@ -959,6 +965,7 @@ class MemriseImportDialog(QDialog):
 		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
 		self.loader.downloadMems = self.importMemsCheckBox.isChecked() and self.downloadMediaCheckBox.isChecked()
 		self.loader.embedMemsOnlineMedia = self.importMemsCheckBox.isChecked() and self.embedMemsOnlineMediaCheckBox.isChecked()
+		self.loader.ignoreDownloadErrors = self.ignoreDownloadErrorsCheckBox.isChecked()
 		self.loader.start(courseUrl)
 
 def startCourseImporter():
