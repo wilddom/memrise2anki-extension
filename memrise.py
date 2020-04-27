@@ -1,4 +1,4 @@
-import urllib.request, urllib.error, urllib.parse, http.cookiejar, urllib.request, urllib.parse, urllib.error, http.client, urllib.parse
+import urllib.request, urllib.error, urllib.parse, http.cookiejar, http.client
 import re, time, os.path, json, collections, datetime, calendar, functools, uuid
 import bs4
 from . import memrise_markdown

@@ -1,5 +1,4 @@
-import json, urllib.request, urllib.parse
-from urllib.error import URLError, HTTPError
+import json, urllib.request, urllib.parse, urllib.error
 import sys
 
 def loadEmbedCode(url):
@@ -8,10 +7,10 @@ def loadEmbedCode(url):
     fullUrl = serviceUrl + "?" + getdata
     try:
         response = urllib.request.urlopen(fullUrl)
-    except URLError as e:
+    except urllib.error.URLError as e:
         print("oembed URLError", fullUrl, file=sys.stderr)
         return None
-    except HTTPError as e:
+    except urllib.error.HTTPError as e:
         print("oembed HTTPError", fullUrl, file=sys.stderr)
         return None
     data = json.load(response)
