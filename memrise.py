@@ -759,7 +759,7 @@ class Service(object):
     def isLoggedIn(self):
         request = urllib.request.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
         response = self.openWithRetry(request)
-        return bool(re.match('https?://www.memrise.com/home/', response.geturl()))
+        return bool(re.match('https://app.memrise.com/home/', response.geturl()))
         
     def login(self, username, password):
         request1 = urllib.request.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
@@ -783,7 +783,7 @@ class Service(object):
                 return False
             else:
                 raise
-        return bool(re.match('https?://www.memrise.com/home/', response2.geturl()))
+        return bool(re.match('https://app.memrise.com/home/', response2.geturl()))
     
     def loadCourse(self, url, observer=None):
         courseLoader = CourseLoader(self)
@@ -856,14 +856,14 @@ class Service(object):
 
     @staticmethod
     def getCourseIdFromUrl(url):
-        match = re.match('https?://www.memrise.com/course/(\d+)/.+/', url)
+        match = re.match('https://app.memrise.com/course/(\d+)/.+/', url)
         if not match:
             raise MemriseError("Import failed. Does your URL look like the sample URL above?")
         return int(match.group(1))
 
     @staticmethod
     def checkCourseUrl(url):
-        match = re.match('https?://www.memrise.com/course/\d+/.+/', url)
+        match = re.match('https://app.memrise.com/course/\d+/.+/', url)
         return bool(match)
 
     @staticmethod
