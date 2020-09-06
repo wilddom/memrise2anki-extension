@@ -668,7 +668,7 @@ class MemriseImportDialog(QDialog):
 		
 		label = QLabel("Enter the home URL of the Memrise course to import:")
 		self.courseUrlLineEdit = QLineEdit()
-		courseUrlTooltip = "e.g. http://www.memrise.com/course/77958/memrise-intro-french/"
+		courseUrlTooltip = "e.g. http://app.memrise.com/course/77958/memrise-intro-french/"
 		label.setToolTip(courseUrlTooltip)
 		self.courseUrlLineEdit.setToolTip(courseUrlTooltip)
 		layout.addWidget(label)
