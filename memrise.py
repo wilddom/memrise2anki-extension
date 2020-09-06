@@ -163,6 +163,7 @@ class Field(object):
     Text = 'text'
     Audio = 'audio'
     Image = 'image'
+    Video = 'video'
     Mem = 'mem'
     
     def __init__(self, fieldType, name, index):
@@ -171,7 +172,7 @@ class Field(object):
         self.index = index
 
 class Column(Field):
-    Types = [Field.Text, Field.Audio, Field.Image]
+    Types = [Field.Text, Field.Audio, Field.Image, Field.Video]
     
     def __init__(self, colType, name, index):
         super(Column, self).__init__(colType, name, index)
@@ -245,7 +246,10 @@ class Pool(object):
     
     def getAudioColumnNames(self):
         return list(self.columnsByType[Field.Audio].keys())
-    
+
+    def getVideoColumnNames(self):
+        return list(self.columnsByType[Field.Video].keys())
+
     def getAttributeNames(self):
         return list(self.attributes.keys())
     
@@ -261,6 +265,9 @@ class Pool(object):
     def getAudioColumns(self):
         return list(self.columnsByType[Field.Audio].values())
     
+    def getVideoColumns(self):
+        return list(self.columnsByType[Field.Video].values())
+
     def getAttributes(self):
         return list(self.attributes.values())
 
@@ -285,6 +292,9 @@ class Pool(object):
     def getAudioColumnName(self, nameOrIndex):
         return self.__getKeyFromIndex(self.getAudioColumnNames(), nameOrIndex)
 
+    def getVideoColumnName(self, nameOrIndex):
+        return self.__getKeyFromIndex(self.getVideoColumnNames(), nameOrIndex)
+
     def getAttributeName(self, nameOrIndex):
         return self.__getKeyFromIndex(self.getAttributeNames(), nameOrIndex)
 
@@ -300,6 +310,9 @@ class Pool(object):
     def hasAudioColumnName(self, name):
         return name in self.getAudioColumnNames()
 
+    def hasVideoColumnName(self, name):
+        return name in self.getVideoColumnNames()
+
     def hasAttributeName(self, name):
         return name in self.getAttributeNames()
 
@@ -314,7 +327,10 @@ class Pool(object):
     
     def countAudioColumns(self):
         return len(self.columnsByType[Field.Audio])
-    
+
+    def countVideoColumns(self):
+        return len(self.columnsByType[Field.Video])
+
     def countAttributes(self):
         return len(self.attributes)
 
@@ -385,6 +401,10 @@ class Thing(object):
     def getAudioColumnData(self, nameOrIndex):
         name = self.pool.getAudioColumnName(nameOrIndex)
         return self.columnDataByType[Field.Audio][name]
+
+    def getVideoColumnData(self, nameOrIndex):
+        name = self.pool.getVideoColumnName(nameOrIndex)
+        return self.columnDataByType[Field.Video][name]
     
     def getImageColumnData(self, nameOrIndex):
         name = self.pool.getImageColumnName(nameOrIndex)
@@ -402,6 +422,11 @@ class Thing(object):
     def setAudioColumnData(self, nameOrIndex, data):
         name = self.pool.getTextColumnName(nameOrIndex)
         self.columnDataByType[Field.Audio][name] = data
+        self.columnData[name] = data
+
+    def setVideoColumnData(self, nameOrIndex, data):
+        name = self.pool.getTextColumnName(nameOrIndex)
+        self.columnDataByType[Field.Video][name] = data
         self.columnData[name] = data
         
     def setImageColumnData(self, nameOrIndex, data):
@@ -434,6 +459,12 @@ class Thing(object):
     def setAudioFiles(self, nameOrIndex, files):
         return self.getAudioColumnData(nameOrIndex).setFiles(files)
 
+    def getVideoFiles(self, nameOrIndex):
+        return self.getVideoColumnData(nameOrIndex).getFiles()
+
+    def setVideoFiles(self, nameOrIndex, files):
+        return self.getVideoColumnData(nameOrIndex).setFiles(files)
+
     def getImageFiles(self, nameOrIndex):
         return self.getImageColumnData(nameOrIndex).getFiles()
 
@@ -443,6 +474,9 @@ class Thing(object):
     def getAudioUrls(self, nameOrIndex):
         return self.getAudioColumnData(nameOrIndex).getRemoteUrls()
 
+    def getVideoUrls(self, nameOrIndex):
+        return self.getVideoColumnData(nameOrIndex).getRemoteUrls()
+
     def getImageUrls(self, nameOrIndex):
         return self.getImageColumnData(nameOrIndex).getRemoteUrls()
 
@@ -451,6 +485,12 @@ class Thing(object):
     
     def getLocalAudioUrls(self, nameOrIndex):
         return self.getAudioColumnData(nameOrIndex).getLocalUrls()
+
+    def setLocalVideoUrls(self, nameOrIndex, urls):
+        self.getVideoColumnData(nameOrIndex).setLocalUrls(urls)
+
+    def getLocalVideoUrls(self, nameOrIndex):
+        return self.getVideoColumnData(nameOrIndex).getLocalUrls()
 
     def setLocalImageUrls(self, nameOrIndex, urls):
         self.getImageColumnData(nameOrIndex).setLocalUrls(urls)
@@ -480,6 +520,12 @@ class ThingLoader(object):
             data = MediaColumnData()
             data.setRemoteUrls(list(map(fixUrl, self.__getUrls(cell))))
             thing.setAudioColumnData(column.name, data)
+
+        for column in self.pool.getVideoColumns():
+            cell = row['columns'].get(str(column.index), {})
+            data = MediaColumnData()
+            data.setRemoteUrls(list(map(fixUrl, self.__getUrls(cell))))
+            thing.setVideoColumnData(column.name, data)
             
         for column in self.pool.getImageColumns():
             cell = row['columns'].get(str(column.index), {})
