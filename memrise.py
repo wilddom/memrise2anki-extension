@@ -652,13 +652,6 @@ class CourseLoader(object):
         level.pool.directions.add(level.direction)
         course.directions.add(level.direction)
 
-        for learnable in levelData["learnables"]:
-            scheduleInfo = ScheduleInfo()
-            scheduleInfo.thingId = learnable["thing_id"]
-            scheduleInfo.direction = level.direction
-            scheduleInfo.position = course.getNextPosition()
-            level.pool.schedule.add(scheduleInfo)
-
         thingusers = {userData["thing_id"]: userData for userData in levelData["thingusers"]}
 
         thingLoader = ThingLoader(level.pool)
@@ -668,17 +661,31 @@ class CourseLoader(object):
                 thing = level.pool.getThing(thingId)
             else:
                 thingData = self.service.loadThingData(thingId)
+                if thingData["pool_id"] != level.pool.id:
+                    if not thingData["pool_id"] in course.pools:
+                        poolData = self.service.loadPoolData(thingData["pool_id"])
+                        pool = self.loadPool(poolData)
+                        pool.course = course
+                        course.pools[pool.id] = pool
+                    pool = course.pools[thingData["pool_id"]]
+                    thingLoader = ThingLoader(pool)
                 thing = thingLoader.loadThing(thingData, self.service.toAbsoluteMediaUrl)
-                level.pool.addThing(thing)
+                thing.pool.addThing(thing)
             level.things.append(thing)
+
+            scheduleInfo = ScheduleInfo()
+            scheduleInfo.thingId = thing.id
+            scheduleInfo.direction = level.direction
+            scheduleInfo.position = course.getNextPosition()
+            thing.pool.schedule.add(scheduleInfo)
 
             if thing.id in thingusers:
                 userData = thingusers[thing.id]
-                level.pool.schedule.add(self.loadScheduleInfo(userData, level.pool))
-                if userData["mem_id"] and not level.pool.mems.has(level.direction, thing):
+                thing.pool.schedule.add(self.loadScheduleInfo(userData, thing.pool))
+                if userData["mem_id"] and not thing.pool.mems.has(level.direction, thing):
                     try:
                         memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], int(userData["learnable_id"]), userData["column_a"], userData["column_b"])
-                        level.pool.mems.add(self.loadMem(userData, memData, level.pool, self.service.toAbsoluteMediaUrl))
+                        thing.pool.mems.add(self.loadMem(userData, memData, thing.pool, self.service.toAbsoluteMediaUrl))
                     except MemNotFoundError:
                         pass
 
