@@ -810,12 +810,12 @@ class Service(object):
                 raise
 
     def isLoggedIn(self):
-        request = urllib.request.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
+        request = urllib.request.Request('https://app.memrise.com/login/', None, {'Referer': 'https://app.memrise.com/'})
         response = self.openWithRetry(request)
         return bool(re.match('https://app.memrise.com/home/', response.geturl()))
 
     def login(self, username, password):
-        request1 = urllib.request.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
+        request1 = urllib.request.Request('https://app.memrise.com/login/', None, {'Referer': 'https://app.memrise.com/'})
         response1 = self.openWithRetry(request1)
         soup = bs4.BeautifulSoup(response1.read(), 'html.parser')
         form = soup.find("form", attrs={"action": '/login/'})
@@ -921,27 +921,27 @@ class Service(object):
 
     @staticmethod
     def getHtmlCourseUrl(courseId):
-        return 'https://www.memrise.com/course/{:d}/'.format(courseId)
+        return 'https://app.memrise.com/course/{:d}/'.format(courseId)
 
     @staticmethod
     def getJsonLevelUrl(courseId, levelIndex):
-        return "https://www.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
+        return "https://app.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
 
     @staticmethod
     def getJsonPoolUrl(poolId):
-        return "https://www.memrise.com/api/pool/get/?pool_id={:d}".format(poolId)
+        return "https://app.memrise.com/api/pool/get/?pool_id={:d}".format(poolId)
 
     @staticmethod
     def getJsonThingUrl(thingId):
-        return "https://www.memrise.com/api/thing/get/?thing_id={:d}".format(thingId)
+        return "https://app.memrise.com/api/thing/get/?thing_id={:d}".format(thingId)
 
     @staticmethod
     def getJsonMemUrl(memId, thingId, colA, colB):
-        return "https://www.memrise.com/api/mem/get/?mem_id={:d}&thing_id={:d}&column_a={:d}&column_b={:d}".format(memId, thingId, colA, colB)
+        return "https://app.memrise.com/api/mem/get/?mem_id={:d}&thing_id={:d}&column_a={:d}&column_b={:d}".format(memId, thingId, colA, colB)
 
     @staticmethod
     def getJsonManyMemUrl(thingId, learnableId):
-        return "https://www.memrise.com/api/mem/get_many_for_thing/?thing_id={:d}&learnable_id={:d}".format(thingId, learnableId)
+        return "https://app.memrise.com/api/mem/get_many_for_thing/?thing_id={:d}&learnable_id={:d}".format(thingId, learnableId)
 
     @staticmethod
     def toAbsoluteMediaUrl(url):
