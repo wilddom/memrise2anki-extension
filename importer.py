@@ -19,16 +19,16 @@ class MemriseCourseLoader(QObject):
 	levelsLoadedChanged = pyqtSignal(int)
 	thingCountChanged = pyqtSignal(int)
 	thingsLoadedChanged = pyqtSignal(int)
-	
+
 	finished = pyqtSignal()
-	
+
 	class RunnableWrapper(QRunnable):
 		def __init__(self, task):
 			super(MemriseCourseLoader.RunnableWrapper, self).__init__()
 			self.task = task
 		def run(self):
 			self.task.run()
-			
+
 	class Observer(object):
 		def __init__(self, sender):
 			self.sender = sender
@@ -36,13 +36,13 @@ class MemriseCourseLoader(QObject):
 			self.totalLoaded = 0
 			self.thingsLoaded = 0
 			self.levelsLoaded = 0
-		
+
 		def levelLoaded(self, levelIndex, level=None):
 			self.levelsLoaded += 1
 			self.sender.levelsLoadedChanged.emit(self.levelsLoaded)
 			self.totalLoaded += 1
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
-			
+
 		def downloadMedia(self, thing):
 			for colName in thing.pool.getImageColumnNames():
 				for image in [f for f in thing.getImageFiles(colName) if not f.isDownloaded()]:
@@ -50,14 +50,14 @@ class MemriseCourseLoader(QObject):
 			for colName in thing.pool.getAudioColumnNames():
 				for audio in [f for f in thing.getAudioFiles(colName) if not f.isDownloaded()]:
 					audio.localUrl = self.sender.download(audio.remoteUrl)
-		
+
 		def downloadMems(self, thing):
 			for mem in list(thing.pool.mems.getMems(thing).values()):
 				for image in [f for f in mem.images if not f.isDownloaded()]:
 					image.localUrl = self.sender.download(image.remoteUrl)
 					if image.isDownloaded():
 						mem.text = mem.text.replace(image.remoteUrl, image.localUrl)
-				
+
 				if self.sender.embedMemsOnlineMedia:
 					soup = bs4.BeautifulSoup(mem.text, 'html.parser')
 					for link in soup.find_all("a", {"class": "embed"}):
@@ -65,7 +65,7 @@ class MemriseCourseLoader(QObject):
 						if embedCode:
 							link.replaceWith(bs4.BeautifulSoup(embedCode, "html.parser"))
 							mem.text = str(soup)
-			
+
 		def thingLoaded(self, thing):
 			if thing and self.sender.downloadMedia:
 				self.downloadMedia(thing)
@@ -75,23 +75,23 @@ class MemriseCourseLoader(QObject):
 			self.sender.thingsLoadedChanged.emit(self.thingsLoaded)
 			self.totalLoaded += 1
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
-		
+
 		def levelCountChanged(self, levelCount):
 			self.sender.levelCountChanged.emit(levelCount)
 			self.totalCount += levelCount
 			self.sender.totalCountChanged.emit(self.totalCount)
-			
+
 		def thingCountChanged(self, thingCount):
 			self.sender.thingCountChanged.emit(thingCount)
 			self.totalCount += thingCount
 			self.sender.totalCountChanged.emit(self.totalCount)
-		
+
 		def __getattr__(self, attr):
 			if hasattr(self.sender, attr):
 				signal = getattr(self.sender, attr)
 				if hasattr(signal, 'emit'):
 					return getattr(signal, 'emit')
-	
+
 	def __init__(self, memriseService):
 		super(MemriseCourseLoader, self).__init__()
 		self.memriseService = memriseService
@@ -104,7 +104,7 @@ class MemriseCourseLoader(QObject):
 		self.embedMemsOnlineMedia = False
 		self.askerFunction = None
 		self.ignoreDownloadErrors = False
-	
+
 	def download(self, url):
 		import urllib.request, urllib.error, urllib.parse
 		while True:
@@ -121,28 +121,28 @@ class MemriseCourseLoader(QObject):
 						raise e
 				else:
 					raise e
-	
+
 	def load(self, url):
 		self.url = url
 		self.run()
-		
+
 	def start(self, url):
 		self.url = url
 		self.runnable = MemriseCourseLoader.RunnableWrapper(self)
 		QThreadPool.globalInstance().start(self.runnable)
-	
+
 	def getResult(self):
 		return self.result
-	
+
 	def getException(self):
 		return self.self.exc_info[1]
-	
+
 	def getExceptionInfo(self):
 		return self.exc_info
-	
+
 	def isException(self):
 		return isinstance(self.exc_info[1], Exception)
-	
+
 	def run(self):
 		self.result = None
 		self.exc_info = (None,None,None)
@@ -156,17 +156,17 @@ class MemriseCourseLoader(QObject):
 class DownloadFailedBox(QMessageBox):
 	def __init__(self):
 		super(DownloadFailedBox, self).__init__()
-		
+
 		self.setWindowTitle("Download failed")
 		self.setIcon(QMessageBox.Warning)
-		
+
 		self.addButton(QMessageBox.Retry)
 		self.addButton(QMessageBox.Ignore)
 		self.addButton(QMessageBox.Abort)
-		
+
 		self.setEscapeButton(QMessageBox.Ignore)
 		self.setDefaultButton(QMessageBox.Retry)
-	
+
 	@pyqtSlot(str, str, str, result=str)
 	def askRetry(self, url, message, info):
 		self.setText(message)
@@ -185,31 +185,31 @@ class MemriseLoginDialog(QDialog):
 	def __init__(self, memriseService):
 		super(MemriseLoginDialog, self).__init__()
 		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-		
+
 		self.memriseService = memriseService
-		
+
 		self.setWindowTitle("Memrise Login")
-		
+
 		layout = QVBoxLayout(self)
-		
+
 		innerLayout = QGridLayout()
-		
+
 		innerLayout.addWidget(QLabel("Username:"),0,0)
 		self.usernameLineEdit = QLineEdit()
 		innerLayout.addWidget(self.usernameLineEdit,0,1)
-		
+
 		innerLayout.addWidget(QLabel("Password:"),1,0)
 		self.passwordLineEdit = QLineEdit()
 		self.passwordLineEdit.setEchoMode(QLineEdit.Password)
 		innerLayout.addWidget(self.passwordLineEdit,1,1)
-		
+
 		layout.addLayout(innerLayout)
-		
+
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
 		layout.addWidget(buttons)
-	
+
 	def accept(self):
 		if self.memriseService.login(self.usernameLineEdit.text(),self.passwordLineEdit.text()):
 			super(MemriseLoginDialog, self).accept()
@@ -218,11 +218,11 @@ class MemriseLoginDialog(QDialog):
 			msgBox.setWindowTitle("Login")
 			msgBox.setText("Invalid credentials")
 			msgBox.exec_();
-		
+
 	def reject(self):
 		super(MemriseLoginDialog, self).reject()
 
-	
+
 	@staticmethod
 	def login(memriseService):
 		dialog = MemriseLoginDialog(memriseService)
@@ -232,82 +232,82 @@ class ModelMappingDialog(QDialog):
 	def __init__(self, col):
 		super(ModelMappingDialog, self).__init__()
 		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-		
+
 		self.col = col
 		self.models = {}
-		
+
 		self.setWindowTitle("Note Type")
 		layout = QVBoxLayout(self)
-		
+
 		layout.addWidget(QLabel("Select note type for newly imported notes:"))
-		
+
 		self.modelSelection = QComboBox()
 		layout.addWidget(self.modelSelection)
 		self.modelSelection.setToolTip("Either a new note type will be created or an existing one can be reused.")
-		
+
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		layout.addWidget(buttons)
-		
+
 		self.memsEnabled = False
-		
+
 	def setMemsEnabled(self, value):
 		self.memsEnabled = value
-	
+
 	def __fillModelSelection(self):
 		self.modelSelection.clear()
 		self.modelSelection.addItem("--- create new ---")
 		self.modelSelection.insertSeparator(1)
 		for name in sorted(self.col.models.allNames()):
 			self.modelSelection.addItem(name)
-	
+
 	@staticmethod
 	def __createTemplate(t, pool, front, back, withMem):
 		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
-		
+
 		t['qfmt'] = "{{"+front+"}}\n"
 		if front in pool.getTextColumnNames():
 			frontAlternatives = "{} {}".format(front, _("Alternatives"))
 			t['qfmt'] += "{{#"+frontAlternatives+"}}<br /><span class=\"alts\">{{"+frontAlternatives+"}}</span>{{/"+frontAlternatives+"}}\n"
-		
+
 		for colName in filter(notFrontBack, pool.getTextColumnNames()):
 			t['qfmt'] += "<br />{{"+colName+"}}\n"
 			altColName = "{} {}".format(colName, _("Alternatives"))
 			t['qfmt'] += "{{#"+altColName+"}}<br /><span class=\"alts\">{{"+altColName+"}}</span>{{/"+altColName+"}}\n"
-		
+
 		for attrName in filter(notFrontBack, pool.getAttributeNames()):
 			t['qfmt'] += "{{#"+attrName+"}}<br /><span class=\"attrs\">({{"+attrName+"}})</span>{{/"+attrName+"}}\n"
-		
+
 		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+back+"}}\n"
 		if back in pool.getTextColumnNames():
 			backAlternatives = "{} {}".format(back, _("Alternatives"))
 			t['afmt'] += "{{#"+backAlternatives+"}}<br /><span class=\"alts\">{{"+backAlternatives+"}}</span>{{/"+backAlternatives+"}}\n"
-		
+
 		if front == pool.getTextColumnName(0):
 			imageside = 'afmt'
 			audioside = 'qfmt'
 		else:
 			imageside = 'qfmt'
 			audioside = 'afmt'
-			
+
 		for colName in filter(notFrontBack, pool.getImageColumnNames()):
 			t[imageside] += "{{#"+colName+"}}<br />{{"+colName+"}}{{/"+colName+"}}\n"
-		
+
 		for colName in filter(notFrontBack, pool.getAudioColumnNames()):
 			t[audioside] += "{{#"+colName+"}}<div style=\"display:none;\">{{"+colName+"}}</div>{{/"+colName+"}}\n"
-		
+
 		if withMem:
 			memField = "{} -> {} {}".format(front, back, _("Mem"))
 			t['afmt'] += "{{#"+memField+"}}<br />{{"+memField+"}}{{/"+memField+"}}\n"
-		
+
 		return t
-	
+
 	def __createMemriseModel(self, course, pool):
 		mm = self.col.models
-				
+
 		name = "Memrise - {} - {}".format(course.title, pool.name)
 		m = mm.new(name)
-		
+
 		for colName in pool.getTextColumnNames():
 			dfm = mm.newField(colName)
 			mm.addField(m, dfm)
@@ -317,132 +317,132 @@ class ModelMappingDialog(QDialog):
 			mm.addField(m, hafm)
 			tcfm = mm.newField("{} {}".format(colName, _("Typing Corrects")))
 			mm.addField(m, tcfm)
-		
+
 		for attrName in pool.getAttributeNames():
 			fm = mm.newField(attrName)
 			mm.addField(m, fm)
-			
+
 		for colName in pool.getImageColumnNames():
 			fm = mm.newField(colName)
 			mm.addField(m, fm)
-		
+
 		for colName in pool.getAudioColumnNames():
 			fm = mm.newField(colName)
 			mm.addField(m, fm)
-		
+
 		if self.memsEnabled:
 			for direction in pool.mems.getDirections():
 				fm = mm.newField("{} -> {} {}".format(direction.front, direction.back, _("Mem")))
 				mm.addField(m, fm)
-		
+
 		fm = mm.newField(_("Level"))
 		mm.addField(m, fm)
-		
+
 		fm = mm.newField(_("Thing"))
 		mm.addField(m, fm)
-		
+
 		m['css'] += "\n.alts {\n font-size: 14px;\n}"
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
-		
+
 		for direction in pool.directions:
 			t = mm.newTemplate(str(direction))
 			self.__createTemplate(t, pool, direction.front, direction.back, self.memsEnabled and direction in pool.mems.getDirections())
 			mm.addTemplate(m, t)
-		
+
 		return m
-	
+
 	def __loadModel(self, thing, deck=None):
 		model = self.__createMemriseModel(thing.pool.course, thing.pool)
-		
+
 		modelStored = self.col.models.byName(model['name'])
 		if modelStored:
 			if self.col.models.scmhash(modelStored) == self.col.models.scmhash(model):
 				model = modelStored
 			else:
 				model['name'] += " ({})".format(str(uuid.uuid4()))
-			
+
 		if deck and 'mid' in deck:
 			deckModel = self.col.models.get(deck['mid'])
 			if deckModel and self.col.models.scmhash(deckModel) == self.col.models.scmhash(model):
 				model = deckModel
-				
+
 		if model and not model['id']:
 			self.col.models.add(model)
 
 		return model
-	
+
 	def reject(self):
 		# prevent close on ESC
 		pass
-	
+
 	def getModel(self, thing, deck):
 		if thing.pool.id in self.models:
 			return self.models[thing.pool.id]
-		
+
 		self.__fillModelSelection()
 		self.exec_()
-		
+
 		if self.modelSelection.currentIndex() == 0:
 			self.models[thing.pool.id] = self.__loadModel(thing, deck)
 		else:
 			modelName = self.modelSelection.currentText()
 			self.models[thing.pool.id] = self.col.models.byName(modelName)
-		
+
 		return self.models[thing.pool.id]
 
 class TemplateMappingDialog(QDialog):
 	def __init__(self, col):
 		super(TemplateMappingDialog, self).__init__()
 		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-		
+
 		self.col = col
 		self.templates = {}
-		
+
 		self.setWindowTitle("Assign Template Direction")
 		layout = QVBoxLayout(self)
-		
+
 		self.grid = QGridLayout()
 		layout.addLayout(self.grid)
-		
+
 		self.grid.addWidget(QLabel("Front:"), 0, 0)
 		self.frontName = QLabel()
 		self.grid.addWidget(self.frontName, 0, 1)
 		self.frontExample = QLabel()
 		self.grid.addWidget(self.frontExample, 0, 2)
-		
+
 		self.grid.addWidget(QLabel("Back:"), 1, 0)
 		self.backName = QLabel()
 		self.grid.addWidget(self.backName, 1, 1)
 		self.backExample = QLabel()
 		self.grid.addWidget(self.backExample, 1, 2)
-		
+
 		layout.addWidget(QLabel("Select template:"))
 		self.templateSelection = QComboBox()
 		layout.addWidget(self.templateSelection)
 		self.templateSelection.setToolTip("Select the corresponding template for this direction.")
-		
+
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		layout.addWidget(buttons)
-	
+
 	def __fillTemplateSelection(self, model):
 		self.templateSelection.clear()
 		for template in model['tmpls']:
 			self.templateSelection.addItem(template['name'], template)
-	
+
 	@staticmethod
 	def getFirst(values):
 		return values[0] if 0 < len(values) else ''
-	
+
 	def reject(self):
 		# prevent close on ESC
 		pass
-	
+
 	def getTemplate(self, thing, note, direction):
 		model = note.model()
 		if direction in self.templates.get(model['id'], {}):
 			return self.templates[model['id']][direction]
-		
+
 		for template in model['tmpls']:
 			if template['name'] == str(direction):
 				self.templates.setdefault(model['id'], {})[direction] = template
@@ -461,7 +461,7 @@ class TemplateMappingDialog(QDialog):
 
 		template = self.templateSelection.itemData(self.templateSelection.currentIndex())
 		self.templates.setdefault(model['id'], {})[direction] = template
-		
+
 		return template
 
 class FieldHelper(object):
@@ -496,13 +496,13 @@ class FieldMappingDialog(QDialog):
 	def __init__(self, col):
 		super(FieldMappingDialog, self).__init__()
 		self.setWindowFlags(Qt.CustomizeWindowHint | Qt.WindowTitleHint)
-		
+
 		self.col = col
 		self.mappings = {}
-		
+
 		self.setWindowTitle("Assign Memrise Fields")
 		layout = QVBoxLayout()
-		
+
 		self.label = QLabel("Define the field mapping for the selected note type.")
 		layout.addWidget(self.label)
 
@@ -516,11 +516,11 @@ class FieldMappingDialog(QDialog):
 		scrollArea.setWidget(viewport)
 
 		layout.addWidget(scrollArea)
-		
+
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok, Qt.Horizontal, self)
 		buttons.accepted.connect(self.accept)
 		layout.addWidget(buttons)
-		
+
 		self.setLayout(layout)
 
 		self.memsEnabled = False
@@ -577,7 +577,7 @@ class FieldMappingDialog(QDialog):
 			for direction in pool.mems.getDirections():
 				fieldSelection.addItem("Mem: {} -> {}".format(direction.front, direction.back),
 									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), "{} -> {} {}".format(direction.front, direction.back, _("Mem"))))
-			
+
 		return fieldSelection
 
 	def __buildGrid(self, pool, model):
@@ -589,12 +589,12 @@ class FieldMappingDialog(QDialog):
 		label2.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 		self.grid.addWidget(label1, 0, 0)
 		self.grid.addWidget(label2, 0, 1)
-				
+
 		fieldNames = [fieldName for fieldName in self.col.models.fieldNames(model) if not fieldName in [_('Thing'), _('Level')]]
 		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
 		if self.memsEnabled:
 			poolFieldCount += pool.mems.countDirections()
-		
+
 		mapping = []
 		for index in range(0, max(len(fieldNames), poolFieldCount)):
 			modelFieldSelection = self.__createModelFieldSelection(fieldNames)
@@ -602,46 +602,46 @@ class FieldMappingDialog(QDialog):
 
 			memriseFieldSelection = self.__createMemriseFieldSelection(pool)
 			self.grid.addWidget(memriseFieldSelection, index+1, 1)
-			
+
 			if index < len(fieldNames):
 				modelFieldSelection.setCurrentIndex(index+2)
-			
+
 			fieldIndex = self.__findIndexWithData(memriseFieldSelection, modelFieldSelection.currentText())
 			if fieldIndex >= 2:
 				memriseFieldSelection.setCurrentIndex(fieldIndex)
-			
+
 			mapping.append((modelFieldSelection, memriseFieldSelection))
-		
+
 		return mapping
-	
+
 	def reject(self):
 		# prevent close on ESC
 		pass
-	
+
 	def getFieldMappings(self, pool, model):
 		if pool.id in self.mappings:
 			if model['id'] in self.mappings[pool.id]:
 				return self.mappings[pool.id][model['id']]
-		
+
 		self.label.setText('Define the field mapping for the note type "{}".'.format(model["name"]))
 		selectionMapping = self.__buildGrid(pool, model)
 		self.exec_()
-		
+
 		mapping = {}
 		for modelFieldSelection, memriseFieldSelection in selectionMapping:
 			fieldName = None
 			if modelFieldSelection.currentIndex() >= 2:
 				fieldName = modelFieldSelection.currentText()
-			
+
 			data = None
 			if memriseFieldSelection.currentIndex() >= 2:
 				data = memriseFieldSelection.itemData(memriseFieldSelection.currentIndex())
-			
+
 			if fieldName and data:
 				mapping.setdefault(fieldName, []).append(data)
-		
+
 		self.mappings.setdefault(pool.id, {})[model['id']] = mapping
-		
+
 		return mapping
 
 class MemriseImportDialog(QDialog):
@@ -652,7 +652,7 @@ class MemriseImportDialog(QDialog):
 		# set up the UI, basically
 		self.setWindowTitle("Import Memrise Course")
 		layout = QVBoxLayout(self)
-		
+
 		self.deckSelection = QComboBox()
 		self.deckSelection.addItem("--- create new ---")
 		self.deckSelection.insertSeparator(1)
@@ -665,7 +665,7 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(label)
 		layout.addWidget(self.deckSelection)
 		self.deckSelection.currentIndexChanged.connect(self.loadDeckUrl)
-		
+
 		label = QLabel("Enter the home URL of the Memrise course to import:")
 		self.courseUrlLineEdit = QLineEdit()
 		courseUrlTooltip = "e.g. http://app.memrise.com/course/77958/memrise-intro-french/"
@@ -673,7 +673,7 @@ class MemriseImportDialog(QDialog):
 		self.courseUrlLineEdit.setToolTip(courseUrlTooltip)
 		layout.addWidget(label)
 		layout.addWidget(self.courseUrlLineEdit)
-		
+
 		label = QLabel("Minimal number of digits in the level tag:")
 		self.minimalLevelTagWidthSpinBox = QSpinBox()
 		self.minimalLevelTagWidthSpinBox.setMinimum(1)
@@ -697,7 +697,7 @@ class MemriseImportDialog(QDialog):
 		importMemsTooltip = "activate \"Download media files\" in order to download image mems"
 		self.importMemsCheckBox.setToolTip(importMemsTooltip)
 		layout.addWidget(self.importMemsCheckBox)
-		
+
 		self.embedMemsOnlineMediaCheckBox = QCheckBox("Embed online media in mems (experimental)")
 		embedMemsOnlineMediaTooltip = "Warning: Embedding online media is not officially supported by Anki,\n it may or may not work depending on your platform."
 		self.embedMemsOnlineMediaCheckBox.setToolTip(embedMemsOnlineMediaTooltip)
@@ -709,10 +709,10 @@ class MemriseImportDialog(QDialog):
 
 		self.downloadMediaCheckBox = QCheckBox("Download media files")
 		layout.addWidget(self.downloadMediaCheckBox)
-		
+
 		self.skipExistingMediaCheckBox = QCheckBox("Skip download of existing media files")
 		layout.addWidget(self.skipExistingMediaCheckBox)
-		
+
 		self.downloadMediaCheckBox.stateChanged.connect(self.skipExistingMediaCheckBox.setEnabled)
 		self.downloadMediaCheckBox.setChecked(True)
 		self.skipExistingMediaCheckBox.setChecked(True)
@@ -721,22 +721,22 @@ class MemriseImportDialog(QDialog):
 		layout.addWidget(self.ignoreDownloadErrorsCheckBox)
 
 		layout.addWidget(QLabel("Keep in mind that it can take a substantial amount of time to download \nand import your course. Good things come to those who wait!"))
-		
+
 		self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
 		self.buttons.accepted.connect(self.loadCourse)
 		self.buttons.rejected.connect(self.reject)
 		okButton = self.buttons.button(QDialogButtonBox.Ok)
 		okButton.setEnabled(False)
 		layout.addWidget(self.buttons)
-		
+
 		def checkUrl(button, predicate, url):
 			button.setEnabled(predicate(url))
 		self.courseUrlLineEdit.textChanged.connect(partial(checkUrl,okButton,memriseService.checkCourseUrl))
-		
+
 		self.progressBar = QProgressBar()
 		self.progressBar.hide()
 		layout.addWidget(self.progressBar)
-		
+
 		def setTotalCount(progressBar, totalCount):
 			progressBar.setRange(0, totalCount)
 			progressBar.setFormat("Downloading: %p% (%v/%m)")
@@ -746,40 +746,40 @@ class MemriseImportDialog(QDialog):
 		self.loader.thingsLoadedChanged.connect(self.progressBar.setValue)
 		self.loader.finished.connect(self.importCourse)
 		self.loader.askerFunction = DownloadFailedBox().askRetry
-		
+
 		self.modelMapper = ModelMappingDialog(mw.col)
 		self.fieldMapper = FieldMappingDialog(mw.col)
 		self.templateMapper = TemplateMappingDialog(mw.col)
-	
+
 	def prepareTitleTag(self, tag):
 		value = ''.join(x for x in tag.title() if x.isalnum())
 		if value.isdigit():
 			return ''
 		return value
-	
+
 	def prepareLevelTag(self, levelNum, width):
 		formatstr = "Level{:0"+str(width)+"d}"
 		return formatstr.format(levelNum)
-	
+
 	def getLevelTags(self, levelCount, level):
 		tags = [self.prepareLevelTag(level.index, max(self.minimalLevelTagWidthSpinBox.value(), len(str(levelCount))))]
 		titleTag = self.prepareTitleTag(level.title)
 		if titleTag:
 			tags.append(titleTag)
 		return tags
-		
+
 	@staticmethod
 	def prepareText(content):
 		return '{:s}'.format(content.strip())
-	
+
 	@staticmethod
 	def prepareAudio(content):
 		return '[sound:{:s}]'.format(content)
-	
+
 	@staticmethod
 	def prepareImage(content):
 		return '<img src="{:s}">'.format(content)
-	
+
 	def selectDeck(self, name, merge=False):
 		did = mw.col.decks.id(name, create=False)
 		if not merge:
@@ -787,10 +787,10 @@ class MemriseImportDialog(QDialog):
 				did = mw.col.decks.id("{}-{}".format(name, str(uuid.uuid4())))
 			else:
 				did = mw.col.decks.id(name, create=True)
-		
+
 		mw.col.decks.select(did)
 		return mw.col.decks.get(did)
-	
+
 	def loadDeckUrl(self, index):
 		did = mw.col.decks.id(self.deckSelection.currentText(), create=False)
 		if did:
@@ -798,23 +798,23 @@ class MemriseImportDialog(QDialog):
 			url = deck.get("addons", {}).get("memrise", {}).get("url", "")
 			if url:
 				self.courseUrlLineEdit.setText(url)
-	
+
 	def saveDeckUrl(self, deck, url):
 		deck.setdefault('addons', {}).setdefault('memrise', {})["url"] = url
 		mw.col.decks.save(deck)
-		
+
 	def saveDeckModelRelation(self, deck, model):
 		deck['mid'] = model['id']
 		mw.col.decks.save(deck)
-		
+
 		model["did"] = deck["id"]
 		mw.col.models.save(model)
-	
+
 	def findExistingNote(self, deckName, course, thing):
 		notes = mw.col.findNotes('deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
 		if notes:
 			return mw.col.getNote(notes[0])
-			
+
 		return None
 
 	def getWithSpec(self, thing, spec):
@@ -827,9 +827,9 @@ class MemriseImportDialog(QDialog):
 			return list(map(self.prepareAudio, list(filter(bool, values))))
 		elif spec.field.type == memrise.Field.Mem:
 			return [self.prepareText(values.get())]
-						
+
 		return None
-	
+
 	@staticmethod
 	def toList(values):
 		if isinstance(values, str):
@@ -840,32 +840,32 @@ class MemriseImportDialog(QDialog):
 			return [values]
 		else:
 			return []
-	
+
 	def importCourse(self):
 		if self.loader.isException():
 			self.buttons.show()
 			self.progressBar.hide()
 			exc_info = self.loader.getExceptionInfo()
 			raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
-		
+
 		try:
 			self.progressBar.setValue(0)
 			self.progressBar.setFormat("Importing: %p% (%v/%m)")
-			
+
 			course = self.loader.getResult()
-			
+
 			self.modelMapper.setMemsEnabled(self.importMemsCheckBox.isEnabled())
 			self.fieldMapper.setMemsEnabled(self.importMemsCheckBox.isEnabled())
-			
+
 			noteCache = {}
-			
+
 			deck = None
 			if self.deckSelection.currentIndex() != 0:
 				deck = self.selectDeck(self.deckSelection.currentText(), merge=True)
 			else:
 				deck = self.selectDeck(course.title, merge=False)
 			self.saveDeckUrl(deck, self.courseUrlLineEdit.text())
-			
+
 			for level in course:
 				tags = self.getLevelTags(len(course), level)
 				for thing in level:
@@ -877,30 +877,30 @@ class MemriseImportDialog(QDialog):
 						model = self.modelMapper.getModel(thing, deck)
 						self.saveDeckModelRelation(deck, model)
 						ankiNote = mw.col.newNote()
-					
+
 					mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
 					for field, data in list(mapping.items()):
 						values = []
 						for spec in data:
 							values.extend(self.toList(self.getWithSpec(thing, spec)))
 						ankiNote[field] = ", ".join(values)
-	
+
 					if _('Level') in list(ankiNote.keys()):
 						levels = set(filter(bool, list(map(str.strip, ankiNote[_('Level')].split(',')))))
 						levels.add(str(level.index))
 						ankiNote[_('Level')] = ', '.join(sorted(levels))
-					
+
 					if _('Thing') in list(ankiNote.keys()):
 						ankiNote[_('Thing')] = str(thing.id)
-					
+
 					for tag in tags:
 						ankiNote.addTag(tag)
-						
+
 					if not ankiNote.cards():
 						mw.col.addNote(ankiNote)
 					ankiNote.flush()
 					noteCache[thing.id] = ankiNote
-	
+
 					scheduleInfo = thing.pool.schedule.get(level.direction, thing)
 					if scheduleInfo:
 						template = self.templateMapper.getTemplate(thing, ankiNote, scheduleInfo.direction)
@@ -935,19 +935,19 @@ class MemriseImportDialog(QDialog):
 
 					self.progressBar.setValue(self.progressBar.value()+1)
 					QApplication.processEvents()
-		
+
 		except Exception:
 			self.buttons.show()
 			self.progressBar.hide()
 			exc_info = sys.exc_info()
 			raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
-		
+
 		mw.col.reset()
 		mw.reset()
-		
+
 		# refresh deck browser so user can see the newly imported deck
 		mw.deckBrowser.refresh()
-		
+
 		self.accept()
 
 	def reject(self):
@@ -959,7 +959,7 @@ class MemriseImportDialog(QDialog):
 		self.buttons.hide()
 		self.progressBar.show()
 		self.progressBar.setValue(0)
-		
+
 		courseUrl = self.courseUrlLineEdit.text()
 		self.loader.downloadMedia = self.downloadMediaCheckBox.isChecked()
 		self.loader.skipExistingMedia = self.skipExistingMediaCheckBox.isChecked()
