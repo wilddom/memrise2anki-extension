@@ -25,7 +25,6 @@ class Course(object):
         self.target = ""
         self.levels = []
         self.pools = {}
-        self.directions = set()
         self.nextPosition = 1
 
     def __iter__(self):
@@ -39,6 +38,18 @@ class Course(object):
         nextPosition = self.nextPosition
         self.nextPosition += 1
         return nextPosition
+
+    def hasThing(self, thingId):
+        for pool in self.pools.values():
+            if pool.hasThing(thingId):
+                return True
+        return False
+
+    def getThing(self, thingId):
+        for pool in self.pools.values():
+            if pool.hasThing(thingId):
+                return pool.getThing(thingId)
+        return None
 
 class Direction(object):
     def __init__(self, front=None, back=None):
@@ -695,50 +706,56 @@ class CourseLoader(object):
 
         level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
         level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
-        level.pool.directions.add(level.direction)
-        course.directions.add(level.direction)
 
         thingusers = {userData["thing_id"]: userData for userData in levelData["thingusers"]}
 
-        thingLoader = ThingLoader(level.pool)
         for learnable in levelData["learnables"]:
             thingId = learnable['thing_id']
-            if level.pool.hasThing(thingId):
-                thing = level.pool.getThing(thingId)
+            if course.hasThing(thingId):
+                thing = course.getThing(thingId)
             else:
                 thingData = self.service.loadThingData(thingId)
-                if thingData["pool_id"] != level.pool.id:
+                if thingData["pool_id"] == level.pool.id:
+                    pool = level.pool
+                else:
                     if not thingData["pool_id"] in course.pools:
                         poolData = self.service.loadPoolData(thingData["pool_id"])
                         pool = self.loadPool(poolData)
                         pool.course = course
                         course.pools[pool.id] = pool
                     pool = course.pools[thingData["pool_id"]]
-                    thingLoader = ThingLoader(pool)
+                thingLoader = ThingLoader(pool)
                 thing = thingLoader.loadThing(thingData, self.service.toAbsoluteMediaUrl)
                 thing.pool.addThing(thing)
             level.things.append(thing)
 
+            direction = Direction()
+            direction.front = thing.pool.getColumnName(levelData["session"]["level"]["column_b"])
+            direction.back = thing.pool.getColumnName(levelData["session"]["level"]["column_a"])
+            if (direction.front is None or direction.back is None):
+                continue
+            thing.pool.directions.add(direction)
+
             scheduleInfo = ScheduleInfo()
             scheduleInfo.thingId = thing.id
-            scheduleInfo.direction = level.direction
+            scheduleInfo.direction = direction
             scheduleInfo.position = course.getNextPosition()
             thing.pool.schedule.add(scheduleInfo)
 
             if thing.id in thingusers:
                 userData = thingusers[thing.id]
                 thing.pool.schedule.add(self.loadScheduleInfo(userData, thing.pool))
-                if userData["mem_id"] and not thing.pool.mems.has(level.direction, thing):
+                if userData["mem_id"] and not thing.pool.mems.has(direction, thing):
                     try:
                         memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], int(userData["learnable_id"]), userData["column_a"], userData["column_b"])
                         thing.pool.mems.add(self.loadMem(userData, memData, thing.pool, self.service.toAbsoluteMediaUrl))
                     except MemNotFoundError:
                         pass
 
-            if thing.id in self.directionThing.get(level.direction, {}):
+            if thing.id in self.directionThing.get(direction, {}):
                 self.thingCount += 1
                 self.notify('thingCountChanged', self.thingCount)
-            self.directionThing.setdefault(level.direction, {})[thing.id] = thing
+            self.directionThing.setdefault(direction, {})[thing.id] = thing
 
             self.notify('thingLoaded', thing)
 
