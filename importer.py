@@ -804,11 +804,12 @@ class MemriseImportDialog(QDialog):
 		mw.col.decks.save(deck)
 
 	def saveDeckModelRelation(self, deck, model):
-		deck['mid'] = model['id']
-		mw.col.decks.save(deck)
+		if model['did'] != deck["id"]:
+			deck['mid'] = model['id']
+			mw.col.decks.save(deck)
 
-		model["did"] = deck["id"]
-		mw.col.models.save(model)
+			model["did"] = deck["id"]
+			mw.col.models.save(model)
 
 	def findExistingNote(self, deckName, course, thing):
 		notes = mw.col.findNotes('deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
