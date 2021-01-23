@@ -7,6 +7,9 @@ from anki.lang import _
 from aqt import mw
 from aqt.qt import *
 from functools import partial
+
+from aqt.utils import showInfo
+
 from . import memrise, oembed
 
 def camelize(content):
@@ -216,8 +219,8 @@ class MemriseLoginDialog(QDialog):
 		else:
 			msgBox = QMessageBox()
 			msgBox.setWindowTitle("Login")
-			msgBox.setText("Invalid credentials")
-			msgBox.exec_();
+			msgBox.setText("Couldn't log in. Please check your credentials.")
+			msgBox.exec_()
 
 	def reject(self):
 		super(MemriseLoginDialog, self).reject()
@@ -227,6 +230,7 @@ class MemriseLoginDialog(QDialog):
 	def login(memriseService):
 		dialog = MemriseLoginDialog(memriseService)
 		return dialog.exec_() == QDialog.Accepted
+
 
 class ModelMappingDialog(QDialog):
 	def __init__(self, col):
@@ -973,6 +977,7 @@ def startCourseImporter():
 	downloadDirectory = MediaManager(mw.col, None).dir()
 	cookiefilename = os.path.join(mw.pm.profileFolder(), 'memrise.cookies')
 	cookiejar = http.cookiejar.MozillaCookieJar(cookiefilename)
+	showInfo(cookiefilename)
 	if os.path.isfile(cookiefilename):
 		cookiejar.load()
 	memriseService = memrise.Service(downloadDirectory, cookiejar)
