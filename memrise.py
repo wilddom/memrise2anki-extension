@@ -1,5 +1,5 @@
 import urllib.request, urllib.error, urllib.parse, http.cookiejar, http.client
-import re, time, os.path, json, collections, datetime, calendar, functools, uuid
+import re, time, os.path, json, collections, datetime, functools, uuid
 import bs4
 import requests.sessions
 

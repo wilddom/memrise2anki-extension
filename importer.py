@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 
-import http.cookiejar, os.path, uuid, sys, datetime, re
+import http.cookiejar, os.path, uuid, datetime
 import bs4
 from anki.media import MediaManager
 from anki.lang import _
@@ -8,7 +8,6 @@ from aqt import mw
 from aqt.qt import *
 from functools import partial
 
-from aqt.utils import showInfo
 
 from . import memrise, oembed
 
@@ -977,7 +976,6 @@ def startCourseImporter():
 	downloadDirectory = MediaManager(mw.col, None).dir()
 	cookiefilename = os.path.join(mw.pm.profileFolder(), 'memrise.cookies')
 	cookiejar = http.cookiejar.MozillaCookieJar(cookiefilename)
-	showInfo(cookiefilename)
 	if os.path.isfile(cookiefilename):
 		cookiejar.load()
 	memriseService = memrise.Service(downloadDirectory, cookiejar)
