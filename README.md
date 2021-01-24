@@ -6,15 +6,6 @@ An extension for Anki 2.1 that downloads and converts a course from Memrise into
 How to install
 --------------
 
-### Add-On
-
-1. Go to Tools -> Add-ons
-2. Click on Get Add-ons
-3. Enter code: `deleted`
-4. Restart Anki
-
-### Manually
-
 1. Download the ZIP-file from github
 2. Open Anki
 3. Go to Tools -> Add-ons
