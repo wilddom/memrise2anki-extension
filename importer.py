@@ -1,6 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 
-import http.cookiejar, os.path, uuid, sys, datetime, re
+import http.cookiejar, os.path, uuid, sys, datetime, re, html
 import bs4
 from anki.media import MediaManager
 from anki.lang import _
@@ -770,6 +770,10 @@ class MemriseImportDialog(QDialog):
 
 	@staticmethod
 	def prepareText(content):
+		return '{:s}'.format(html.escape(content.strip()))
+
+	@staticmethod
+	def prepareHtml(content):
 		return '{:s}'.format(content.strip())
 
 	@staticmethod
@@ -827,7 +831,7 @@ class MemriseImportDialog(QDialog):
 		elif spec.field.type == memrise.Field.Audio:
 			return list(map(self.prepareAudio, list(filter(bool, values))))
 		elif spec.field.type == memrise.Field.Mem:
-			return [self.prepareText(values.get())]
+			return [self.prepareHtml(values.get())]
 
 		return None
 
