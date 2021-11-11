@@ -258,7 +258,7 @@ class ModelMappingDialog(QDialog):
 		self.modelSelection.clear()
 		self.modelSelection.addItem("--- create new ---")
 		self.modelSelection.insertSeparator(1)
-		for name in sorted(self.col.models.allNames()):
+		for name in sorted(self.col.models.all_names()):
 			self.modelSelection.addItem(name)
 
 	@staticmethod
@@ -439,7 +439,7 @@ class TemplateMappingDialog(QDialog):
 		pass
 
 	def getTemplate(self, thing, note, direction):
-		model = note.model()
+		model = note.note_type()
 		if direction in self.templates.get(model['id'], {}):
 			return self.templates[model['id']][direction]
 
@@ -590,7 +590,7 @@ class FieldMappingDialog(QDialog):
 		self.grid.addWidget(label1, 0, 0)
 		self.grid.addWidget(label2, 0, 1)
 
-		fieldNames = [fieldName for fieldName in self.col.models.fieldNames(model) if not fieldName in [_('Thing'), _('Level')]]
+		fieldNames = [fieldName for fieldName in self.col.models.field_names(model) if not fieldName in [_('Thing'), _('Level')]]
 		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
 		if self.memsEnabled:
 			poolFieldCount += pool.mems.countDirections()
@@ -656,7 +656,7 @@ class MemriseImportDialog(QDialog):
 		self.deckSelection = QComboBox()
 		self.deckSelection.addItem("--- create new ---")
 		self.deckSelection.insertSeparator(1)
-		for name in sorted(mw.col.decks.allNames(dyn=False)):
+		for name in sorted([x.name for x in mw.col.decks.all_names_and_ids(include_filtered=False)]):
 			self.deckSelection.addItem(name)
 		deckSelectionTooltip = "<b>Updates a previously downloaded course.</b><br />In order for this to work the field <i>Thing</i> must not be removed or renamed, it is needed to identify existing notes."
 		self.deckSelection.setToolTip(deckSelectionTooltip)
@@ -816,7 +816,7 @@ class MemriseImportDialog(QDialog):
 			mw.col.models.save(model)
 
 	def findExistingNote(self, deckName, course, thing):
-		notes = mw.col.findNotes('deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
+		notes = mw.col.find_notes('deck:"{}" {}:"{}"'.format(deckName, 'Thing', thing.id))
 		if notes:
 			return mw.col.getNote(notes[0])
 
@@ -883,7 +883,7 @@ class MemriseImportDialog(QDialog):
 						self.saveDeckModelRelation(deck, model)
 						ankiNote = mw.col.newNote()
 
-					mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.model())
+					mapping = self.fieldMapper.getFieldMappings(thing.pool, ankiNote.note_type())
 					for field, data in list(mapping.items()):
 						values = []
 						for spec in data:
@@ -899,7 +899,7 @@ class MemriseImportDialog(QDialog):
 						ankiNote[_('Thing')] = str(thing.id)
 
 					for tag in tags:
-						ankiNote.addTag(tag)
+						ankiNote.add_tag(tag)
 
 					if not ankiNote.cards():
 						mw.col.addNote(ankiNote)
