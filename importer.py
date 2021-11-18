@@ -3,7 +3,6 @@
 import http.cookiejar, os.path, uuid, sys, datetime, re, html
 import bs4
 from anki.media import MediaManager
-from anki.lang import _
 from aqt import mw
 from aqt.qt import *
 from functools import partial
@@ -267,12 +266,12 @@ class ModelMappingDialog(QDialog):
 
 		t['qfmt'] = "{{"+front+"}}\n"
 		if front in pool.getTextColumnNames():
-			frontAlternatives = "{} {}".format(front, _("Alternatives"))
+			frontAlternatives = "{} {}".format(front, "Alternatives")
 			t['qfmt'] += "{{#"+frontAlternatives+"}}<br /><span class=\"alts\">{{"+frontAlternatives+"}}</span>{{/"+frontAlternatives+"}}\n"
 
 		for colName in filter(notFrontBack, pool.getTextColumnNames()):
 			t['qfmt'] += "<br />{{"+colName+"}}\n"
-			altColName = "{} {}".format(colName, _("Alternatives"))
+			altColName = "{} {}".format(colName, "Alternatives")
 			t['qfmt'] += "{{#"+altColName+"}}<br /><span class=\"alts\">{{"+altColName+"}}</span>{{/"+altColName+"}}\n"
 
 		for attrName in filter(notFrontBack, pool.getAttributeNames()):
@@ -280,7 +279,7 @@ class ModelMappingDialog(QDialog):
 
 		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+back+"}}\n"
 		if back in pool.getTextColumnNames():
-			backAlternatives = "{} {}".format(back, _("Alternatives"))
+			backAlternatives = "{} {}".format(back, "Alternatives")
 			t['afmt'] += "{{#"+backAlternatives+"}}<br /><span class=\"alts\">{{"+backAlternatives+"}}</span>{{/"+backAlternatives+"}}\n"
 
 		if front == pool.getTextColumnName(0):
@@ -297,7 +296,7 @@ class ModelMappingDialog(QDialog):
 			t[audioside] += "{{#"+colName+"}}<div style=\"display:none;\">{{"+colName+"}}</div>{{/"+colName+"}}\n"
 
 		if withMem:
-			memField = "{} -> {} {}".format(front, back, _("Mem"))
+			memField = "{} -> {} {}".format(front, back, "Mem")
 			t['afmt'] += "{{#"+memField+"}}<br />{{"+memField+"}}{{/"+memField+"}}\n"
 
 		return t
@@ -311,11 +310,11 @@ class ModelMappingDialog(QDialog):
 		for colName in pool.getTextColumnNames():
 			dfm = mm.newField(colName)
 			mm.addField(m, dfm)
-			afm = mm.newField("{} {}".format(colName, _("Alternatives")))
+			afm = mm.newField("{} {}".format(colName, "Alternatives"))
 			mm.addField(m, afm)
-			hafm = mm.newField("{} {}".format(colName, _("Hidden Alternatives")))
+			hafm = mm.newField("{} {}".format(colName, "Hidden Alternatives"))
 			mm.addField(m, hafm)
-			tcfm = mm.newField("{} {}".format(colName, _("Typing Corrects")))
+			tcfm = mm.newField("{} {}".format(colName, "Typing Corrects"))
 			mm.addField(m, tcfm)
 
 		for attrName in pool.getAttributeNames():
@@ -332,13 +331,13 @@ class ModelMappingDialog(QDialog):
 
 		if self.memsEnabled:
 			for direction in pool.mems.getDirections():
-				fm = mm.newField("{} -> {} {}".format(direction.front, direction.back, _("Mem")))
+				fm = mm.newField("{} -> {} {}".format(direction.front, direction.back, "Mem"))
 				mm.addField(m, fm)
 
-		fm = mm.newField(_("Level"))
+		fm = mm.newField("Level")
 		mm.addField(m, fm)
 
-		fm = mm.newField(_("Thing"))
+		fm = mm.newField("Thing")
 		mm.addField(m, fm)
 
 		m['css'] += "\n.alts {\n font-size: 14px;\n}"
@@ -561,12 +560,12 @@ class FieldMappingDialog(QDialog):
 		for column in pool.getTextColumns():
 			fieldSelection.addItem("Text: {}".format(column.name),
 								FieldHelper(column, memrise.Thing.getDefinitions))
-			fieldSelection.addItem("{1}: {0}".format(column.name, _("Alternatives")),
-								FieldHelper(column, memrise.Thing.getAlternatives, "{} {}".format(column.name, _("Alternatives"))))
-			fieldSelection.addItem("{1}: {0}".format(column.name, _("Hidden Alternatives")),
-								FieldHelper(column, memrise.Thing.getHiddenAlternatives, "{} {}".format(column.name, _("Hidden Alternatives"))))
-			fieldSelection.addItem("{1}: {0}".format(column.name, _("Typing Corrects")),
-								FieldHelper(column, memrise.Thing.getTypingCorrects, "{} {}".format(column.name, _("Typing Corrects"))))
+			fieldSelection.addItem("{1}: {0}".format(column.name, "Alternatives"),
+								FieldHelper(column, memrise.Thing.getAlternatives, "{} {}".format(column.name, "Alternatives")))
+			fieldSelection.addItem("{1}: {0}".format(column.name, "Hidden Alternatives"),
+								FieldHelper(column, memrise.Thing.getHiddenAlternatives, "{} {}".format(column.name, "Hidden Alternatives")))
+			fieldSelection.addItem("{1}: {0}".format(column.name, "Typing Corrects"),
+								FieldHelper(column, memrise.Thing.getTypingCorrects, "{} {}".format(column.name, "Typing Corrects")))
 		for column in pool.getImageColumns():
 			fieldSelection.addItem("Image: {}".format(column.name), FieldHelper(column, memrise.Thing.getLocalImageUrls))
 		for column in pool.getAudioColumns():
@@ -576,7 +575,7 @@ class FieldMappingDialog(QDialog):
 		if self.memsEnabled:
 			for direction in pool.mems.getDirections():
 				fieldSelection.addItem("Mem: {} -> {}".format(direction.front, direction.back),
-									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), "{} -> {} {}".format(direction.front, direction.back, _("Mem"))))
+									FieldHelper(memrise.Field(memrise.Field.Mem, None, None), lambda thing, fieldname, direction=direction: pool.mems.get(direction, thing), "{} -> {} {}".format(direction.front, direction.back, "Mem")))
 
 		return fieldSelection
 
@@ -590,7 +589,7 @@ class FieldMappingDialog(QDialog):
 		self.grid.addWidget(label1, 0, 0)
 		self.grid.addWidget(label2, 0, 1)
 
-		fieldNames = [fieldName for fieldName in self.col.models.field_names(model) if not fieldName in [_('Thing'), _('Level')]]
+		fieldNames = [fieldName for fieldName in self.col.models.field_names(model) if not fieldName in ['Thing', 'Level']]
 		poolFieldCount = pool.countTextColumns()*4 + pool.countImageColumns() + pool.countAudioColumns() + pool.countAttributes()
 		if self.memsEnabled:
 			poolFieldCount += pool.mems.countDirections()
@@ -890,13 +889,13 @@ class MemriseImportDialog(QDialog):
 							values.extend(self.toList(self.getWithSpec(thing, spec)))
 						ankiNote[field] = ", ".join(values)
 
-					if _('Level') in list(ankiNote.keys()):
-						levels = set(filter(bool, list(map(str.strip, ankiNote[_('Level')].split(',')))))
+					if 'Level' in list(ankiNote.keys()):
+						levels = set(filter(bool, list(map(str.strip, ankiNote['Level'].split(',')))))
 						levels.add(str(level.index))
-						ankiNote[_('Level')] = ', '.join(sorted(levels))
+						ankiNote['Level'] = ', '.join(sorted(levels))
 
-					if _('Thing') in list(ankiNote.keys()):
-						ankiNote[_('Thing')] = str(thing.id)
+					if 'Thing' in list(ankiNote.keys()):
+						ankiNote['Thing'] = str(thing.id)
 
 					for tag in tags:
 						ankiNote.add_tag(tag)
