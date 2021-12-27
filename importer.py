@@ -1,11 +1,13 @@
 ﻿# -*- coding: utf-8 -*-
 
-import http.cookiejar, os.path, uuid, sys, datetime, re, html
+import http.cookiejar, os.path, uuid, sys, datetime, html
 import bs4
 from anki.media import MediaManager
 from aqt import mw
 from aqt.qt import *
 from functools import partial
+
+
 from . import memrise, oembed
 
 def camelize(content):
@@ -215,8 +217,8 @@ class MemriseLoginDialog(QDialog):
 		else:
 			msgBox = QMessageBox()
 			msgBox.setWindowTitle("Login")
-			msgBox.setText("Invalid credentials")
-			msgBox.exec_();
+			msgBox.setText("Couldn't log in. Please check your credentials.")
+			msgBox.exec_()
 
 	def reject(self):
 		super(MemriseLoginDialog, self).reject()
@@ -226,6 +228,7 @@ class MemriseLoginDialog(QDialog):
 	def login(memriseService):
 		dialog = MemriseLoginDialog(memriseService)
 		return dialog.exec_() == QDialog.Accepted
+
 
 class ModelMappingDialog(QDialog):
 	def __init__(self, col):
