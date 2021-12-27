@@ -813,8 +813,7 @@ class Service(object):
         self.downloadDirectory = downloadDirectory
         if cookiejar is None:
             cookiejar = http.cookiejar.CookieJar()
-        # self.opener = urllib.request.build_opener(IncompleteReadHttpAndHttpsHandler, urllib.request.HTTPCookieProcessor(cookiejar))
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookiejar))
+        self.opener = urllib.request.build_opener(IncompleteReadHttpAndHttpsHandler, urllib.request.HTTPCookieProcessor(cookiejar))
         self.session = requests.Session()
         self.session.cookies = cookiejar
 
@@ -837,30 +836,29 @@ class Service(object):
                 raise
 
     def isLoggedIn(self):
-        response = self.session.get('https://app.memrise.com/v1.17/me/', headers={'Referer': 'https://www.memrise.com/app', "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:84.0) Gecko/20100101 Firefox/84.0"})
+        response = self.session.get('https://app.memrise.com/v1.17/me/', headers={'Referer': 'https://www.memrise.com/app'})
         return response.status_code == 200
 
     def login(self, username, password):
-        signin_page = self.session.get("https://app.memrise.com/signin", headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:84.0) Gecko/20100101 Firefox/84.0"})
+        signin_page = self.session.get("https://app.memrise.com/signin")
         signin_soup = bs4.BeautifulSoup(signin_page.content, "html.parser")
-        info_json = signin_soup.select_one("#__NEXT_DATA__").contents[0]
-        info_json = json.loads(info_json)
+        info_json = json.loads(signin_soup.select_one("#__NEXT_DATA__").string)
         client_id = info_json["runtimeConfig"]["OAUTH_CLIENT_ID"]
         signin_data = {
-            "username": username,
-            "password": password,
-            "client_id": client_id,
-            "grant_type": "password"
+            'username': username,
+            'password': password,
+            'client_id': client_id,
+            'grant_type': 'password'
         }
 
-        obtain_login_token_res = self.session.post('https://app.memrise.com/v1.17/auth/access_token/', data=json.dumps(signin_data), headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:84.0) Gecko/20100101 Firefox/84.0", "Content-Type": "application/json"})
-        if not str(obtain_login_token_res.status_code).startswith("2"):
+        obtain_login_token_res = self.session.post('https://app.memrise.com/v1.17/auth/access_token/', json=signin_data)
+        if not obtain_login_token_res.ok:
             return False
-        token = json.loads(obtain_login_token_res.content.decode("utf-8"))["access_token"]["access_token"]
+        token = obtain_login_token_res.json()["access_token"]["access_token"]
 
-        actual_login_res = self.session.get("https://app.memrise.com/v1.17/auth/web/?invalidate_token_after=true&token=" + token)
+        actual_login_res = self.session.get('https://app.memrise.com/v1.17/auth/web/', params={'invalidate_token_after': 'true', 'token': token})
 
-        if not json.loads(actual_login_res.content.decode("utf-8"))["success"]:
+        if not actual_login_res.json()["success"]:
             return False
 
         return True
