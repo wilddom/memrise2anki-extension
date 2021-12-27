@@ -1,5 +1,5 @@
 import urllib.request, urllib.error, urllib.parse, http.cookiejar, http.client
-import re, time, os.path, json, collections, datetime, functools, uuid
+import re, time, os.path, json, collections, datetime, functools, uuid, errno
 import bs4
 import requests.sessions
 
@@ -818,15 +818,21 @@ class Service(object):
         self.session = requests.Session()
         self.session.cookies = cookiejar
 
-    def openWithRetry(self, url, tryCount=3):
+    def openWithRetry(self, url, maxAttempts=5, attempt=1):
         try:
             return self.opener.open(url)
+        except urllib.error.URLError as e:
+            if e.errno == errno.ECONNRESET and maxAttempts > attempt:
+                time.sleep(1.0*attempt)
+                return self.openWithRetry(url, maxAttempts, attempt+1)
+            else:
+                raise
         except http.client.BadStatusLine:
             # not clear why this error occurs (seemingly randomly),
             # so I regret that all we can do is wait and retry.
-            if tryCount > 0:
+            if maxAttempts > attempt:
                 time.sleep(0.1)
-                return self.openWithRetry(url, tryCount-1)
+                return self.openWithRetry(url, maxAttempts, attempt+1)
             else:
                 raise
 
