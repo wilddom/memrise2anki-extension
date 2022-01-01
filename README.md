@@ -6,13 +6,12 @@ An extension for Anki 2.1 that downloads and converts a course from Memrise into
 How to install
 --------------
 
-1. Download the ZIP-file from github
+1. Download the ankiaddon file from github
 2. Open Anki
-3. Go to Tools -> Add-ons
-4. Make sure no Add-on is selected
-5. Click on View Files
-6. Extract the ZIP-file into this directory
-7. Restart Anki
+3. Go to `Tools` -> `Add-ons`
+4. Click on `Install from file...`
+5. Select the previously downloaded ankiaddon file
+6. Restart Anki
 
 
 Note type
