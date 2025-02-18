@@ -1,57 +1,20 @@
 import urllib.request, urllib.error, urllib.parse, http.cookiejar, http.client
-import re, time, os.path, json, collections, datetime, functools, uuid, errno
+import re, time, os.path, json, collections, datetime, functools, uuid, errno, itertools
 import bs4
 import requests.sessions
-
-from . import memrise_markdown
 
 def utcToLocal(utcDt):
     offset = datetime.datetime.fromtimestamp(86400)-datetime.datetime.utcfromtimestamp(86400)
     return utcDt+offset
 
 def sanitizeName(name, default=""):
-    name = re.sub("<.*?>", "", name)
-    name = re.sub("\s\s+", "", name)
-    name = re.sub("\ufeff", "", name)
+    name = re.sub(r"<.*?>", "", name)
+    name = re.sub(r"\s\s+", "", name)
+    name = re.sub(r"\ufeff", "", name)
     name = name.strip()
     if not name:
         return default
     return name
-
-class Course(object):
-    def __init__(self, courseId):
-        self.id = courseId
-        self.title = ""
-        self.description = ""
-        self.source = ""
-        self.target = ""
-        self.levels = []
-        self.pools = {}
-        self.nextPosition = 1
-
-    def __iter__(self):
-        for level in self.levels:
-            yield level
-
-    def __len__(self):
-        return len(self.levels)
-
-    def getNextPosition(self):
-        nextPosition = self.nextPosition
-        self.nextPosition += 1
-        return nextPosition
-
-    def hasThing(self, thingId):
-        for pool in self.pools.values():
-            if pool.hasThing(thingId):
-                return True
-        return False
-
-    def getThing(self, thingId):
-        for pool in self.pools.values():
-            if pool.hasThing(thingId):
-                return pool.getThing(thingId)
-        return None
 
 class Direction(object):
     def __init__(self, front=None, back=None):
@@ -73,105 +36,6 @@ class Direction(object):
     def __str__(self):
         return "{} -> {}".format(self.front, self.back)
 
-class Schedule(object):
-    def __init__(self):
-        self.directionThing = {}
-        self.thingDirection = {}
-
-    def add(self, info):
-        self.directionThing.setdefault(info.direction, {})[info.thingId] = info
-        self.thingDirection.setdefault(info.thingId, {})[info.direction] = info
-
-    def get(self, direction, thing):
-        if not isinstance(thing, Thing):
-            thing = Thing(thing)
-        return self.directionThing.get(direction, {}).get(thing.id)
-
-    def getScheduleInfos(self, thing):
-        if not isinstance(thing, Thing):
-            thing = Thing(thing)
-        return self.thingDirection.get(thing.id, {})
-
-    def getDirections(self):
-        return list(self.directionThing.keys())
-
-class ScheduleInfo(object):
-    def __init__(self):
-        self.thingId = None
-        self.direction = Direction()
-        self.position = 0
-        self.interval = None
-        self.ignored = False
-        self.total = 0
-        self.correct = 0
-        self.incorrect = 0
-        self.streak = 0
-        self.due = datetime.date.today()
-
-class MemCollection(object):
-    def __init__(self):
-        self.directionThing = {}
-        self.thingDirection = {}
-
-    def add(self, mem):
-        self.directionThing.setdefault(mem.direction, {})[mem.thingId] = mem
-        self.thingDirection.setdefault(mem.thingId, {})[mem.direction] = mem
-
-    def has(self, direction, thing):
-        return thing.id in self.directionThing.get(direction, {})
-
-    def get(self, direction, thing):
-        return self.directionThing.get(direction, {}).get(thing.id, Mem())
-
-    def getMems(self, thing):
-        return self.thingDirection.get(thing.id, {})
-
-    def getDirections(self):
-        return list(self.directionThing.keys())
-
-    def countDirections(self):
-        return len(self.directionThing.keys())
-
-class Mem(object):
-    def __init__(self, memId=None):
-        self.id = memId
-        self.direction = Direction()
-        self.thingId = None
-        self.text = ""
-        self.images = []
-
-    def get(self):
-        return self.text
-
-class Level(object):
-    def __init__(self, levelId):
-        self.id = levelId
-        self.index = 0
-        self.title = ""
-        self.things = []
-        self.course = None
-        self.pool = None
-        self.direction = Direction()
-
-    def __iter__(self):
-        for thing in self.things:
-            yield thing
-
-    def __len__(self):
-        return len(self.things)
-
-class NameUniquifier(object):
-    def __init__(self):
-        self.names = {}
-
-    def __call__(self, key):
-        if key not in self.names:
-            self.names[key] = 1
-            return key
-
-        self.names[key] += 1
-        return "{} {}".format(key, self.names[key])
-
 class Field(object):
     Text = 'text'
     Audio = 'audio'
@@ -179,74 +43,89 @@ class Field(object):
     Video = 'video'
     Mem = 'mem'
 
-    def __init__(self, fieldType, name, index):
+    def __init__(self, fieldType, name):
         self.type = fieldType
         self.name = name
-        self.index = index
 
 class Column(Field):
     Types = [Field.Text, Field.Audio, Field.Image, Field.Video]
 
-    def __init__(self, colType, name, index):
-        super(Column, self).__init__(colType, name, index)
+    def __init__(self, colType, name, direction):
+        super(Column, self).__init__(colType, name)
+        self.direction = direction
 
 class Attribute(Field):
     Types = [Field.Text]
 
-    def __init__(self, attrType, name, index):
-        super(Attribute, self).__init__(attrType, name, index)
+    def __init__(self, attrType, name):
+        super(Attribute, self).__init__(attrType, name)
 
-class Pool(object):
-    def __init__(self, poolId=None):
-        self.id = poolId
-        self.name = ''
-        self.course = None
-
+class Course(object):
+    def __init__(self, courseId):
+        self.id = courseId
+        self.title = ""
+        self.description = ""
+        
+        self.nextPosition = 1
+        
+        self.levels = []
+        
         self.columns = collections.OrderedDict()
         self.attributes = collections.OrderedDict()
 
         self.columnsByType = collections.OrderedDict()
         for colType in Column.Types:
             self.columnsByType[colType] = collections.OrderedDict()
-        self.columnsByIndex = collections.OrderedDict()
 
-        self.uniquifyName = NameUniquifier()
+    def __iter__(self):
+        for level in self.levels:
+            yield level
 
-        self.things = {}
-        self.schedule = Schedule()
-        self.mems = MemCollection()
-        self.directions = set()
+    def __len__(self):
+        return len(self.levels)
 
-    def addThing(self, thing):
-        self.things[thing.id] = thing
+    def getNextPosition(self):
+        nextPosition = self.nextPosition
+        self.nextPosition += 1
+        return nextPosition
 
-    def getThing(self, thingId):
-        return self.things.get(thingId, None)
+    def hasLearnable(self, learnableId):
+        for level in self.levels:
+            if level.hasLearnable(learnableId):
+                return True
+        return False
 
-    def hasThing(self, thingId):
-        return thingId in self.things
+    def getLearnable(self, learnableId):
+        for level in self.levels:
+            if level.hasLearnable(learnableId):
+                return level.getLearnable(learnableId)
+        return None
+    
+    def getDirections(self):
+        return list(set(itertools.chain(*map(lambda x: x.getDirections(), self.levels))))
 
-    def addColumn(self, colType, name, index):
+    def addColumn(self, colType, name, direction):
         if not colType in Column.Types:
-            return
+            return None
 
-        column = Column(colType, self.uniquifyName(sanitizeName(name, "Column")), int(index))
+        column = Column(colType, sanitizeName(name, "Column"), direction)
         self.columns[column.name] = column
         self.columnsByType[column.type][column.name] = column
-        self.columnsByIndex[column.index] = column
+        return column
 
-    def addAttribute(self, attrType, name, index):
+    def addAttribute(self, attrType, name):
         if not attrType in Attribute.Types:
-            return
+            return None
 
-        attribute = Attribute(attrType, self.uniquifyName(sanitizeName(name, "Attribute")), int(index))
+        attribute = Attribute(attrType, sanitizeName(name, "Attribute"))
         self.attributes[attribute.name] = attribute
+        return attribute
 
     def getColumn(self, name):
-        return self.columns.get(name)
+        return self.columns.get(sanitizeName(name, "Column"))
 
     def getAttribute(self, name):
-        return self.columns.get(name)
+        return self.attributes.get(sanitizeName(name, "Attribute"))
 
     def getColumnNames(self):
         return list(self.columns.keys())
@@ -284,50 +163,23 @@ class Pool(object):
     def getAttributes(self):
         return list(self.attributes.values())
 
-    @staticmethod
-    def __getKeyFromIndex(keys, index):
-        if not isinstance(index, int):
-            return index
-        return keys[index]
-
-    def getColumnName(self, memriseIndex):
-        column = self.columnsByIndex.get(int(memriseIndex))
-        if column:
-            return column.name
-        return None
-
-    def getTextColumnName(self, nameOrIndex):
-        return self.__getKeyFromIndex(self.getTextColumnNames(), nameOrIndex)
-
-    def getImageColumnName(self, nameOrIndex):
-        return self.__getKeyFromIndex(self.getImageColumnNames(), nameOrIndex)
-
-    def getAudioColumnName(self, nameOrIndex):
-        return self.__getKeyFromIndex(self.getAudioColumnNames(), nameOrIndex)
-
-    def getVideoColumnName(self, nameOrIndex):
-        return self.__getKeyFromIndex(self.getVideoColumnNames(), nameOrIndex)
-
-    def getAttributeName(self, nameOrIndex):
-        return self.__getKeyFromIndex(self.getAttributeNames(), nameOrIndex)
-
     def hasColumnName(self, name):
-        return name in self.columns
+        return sanitizeName(name, "Column") in self.columns
 
     def hasTextColumnName(self, name):
-        return name in self.getTextColumnNames()
+        return sanitizeName(name, "Column") in self.getTextColumnNames()
 
     def hasImageColumnName(self, name):
-        return name in self.getImageColumnNames()
+        return sanitizeName(name, "Column") in self.getImageColumnNames()
 
     def hasAudioColumnName(self, name):
-        return name in self.getAudioColumnNames()
+        return sanitizeName(name, "Column") in self.getAudioColumnNames()
 
     def hasVideoColumnName(self, name):
-        return name in self.getVideoColumnNames()
+        return sanitizeName(name, "Column") in self.getVideoColumnNames()
 
     def hasAttributeName(self, name):
-        return name in self.getAttributeNames()
+        return sanitizeName(name, "Column") in self.getAttributeNames()
 
     def countColumns(self):
         return len(self.columns)
@@ -346,6 +198,49 @@ class Pool(object):
 
     def countAttributes(self):
         return len(self.attributes)
+
+class Progress(object):
+    def __init__(self):
+        self.ignored = False
+        self.last_date = None
+        self.created_date = None
+        self.next_date = None
+        self.interval = None
+        self.growth_level = 0
+        self.attempts = 0
+        self.correct = 0
+        self.incorrect = 0
+        self.total_streak = 0
+        self.current_streak = 0
+        self.position = 0
+
+class Level(object):
+    def __init__(self, levelId):
+        self.id = levelId
+        self.index = 0
+        self.title = ""
+        self.learnables = collections.OrderedDict()
+        self.course = None
+
+    def __iter__(self):
+        for learnable in self.learnables.values():
+            yield learnable
+
+    def __len__(self):
+        return len(self.learnables)
+    
+    def hasLearnable(self, learnableId):
+        return learnableId in self.learnables
+
+    def getLearnable(self, learnableId):
+        return self.learnables.get(learnableId)
+
+    def addLearnable(self, learnable):
+        self.learnables[learnable.id] = learnable
+        learnable.level = self
+
+    def getDirections(self):
+        return list(set(map(lambda x: x.direction, self.learnables.values())))
 
 class TextColumnData(object):
     def __init__(self):
@@ -392,10 +287,12 @@ class AttributeData(object):
     def __init__(self):
         self.values = []
 
-class Thing(object):
-    def __init__(self, thingId):
-        self.id = thingId
-        self.pool = None
+class Learnable(object):
+    def __init__(self, learnableId):
+        self.id = learnableId
+        
+        self.course = None
+        self.direction = None
 
         self.columnData = collections.OrderedDict()
         self.columnDataByType = collections.OrderedDict()
@@ -403,209 +300,123 @@ class Thing(object):
             self.columnDataByType[colType] = collections.OrderedDict()
 
         self.attributeData = collections.OrderedDict()
+        self.progress = Progress()
 
-    def getColumnData(self, name):
+    def getColumnData(self, nameOrColumn):
+        if isinstance(nameOrColumn, Column):
+            name = nameOrColumn.name
+        else:
+            name = nameOrColumn
         return self.columnData[name]
 
-    def getTextColumnData(self, nameOrIndex):
-        name = self.pool.getTextColumnName(nameOrIndex)
-        return self.columnDataByType[Field.Text][name]
+    def getTextColumnData(self, name):
+        return self.columnDataByType[Field.Text].get(name, TextColumnData())
 
-    def getAudioColumnData(self, nameOrIndex):
-        name = self.pool.getAudioColumnName(nameOrIndex)
-        return self.columnDataByType[Field.Audio][name]
+    def getAudioColumnData(self, name):
+        return self.columnDataByType[Field.Audio].get(name, MediaColumnData())
 
-    def getVideoColumnData(self, nameOrIndex):
-        name = self.pool.getVideoColumnName(nameOrIndex)
-        return self.columnDataByType[Field.Video][name]
+    def getVideoColumnData(self, name):
+        return self.columnDataByType[Field.Video].get(name, MediaColumnData())
 
-    def getImageColumnData(self, nameOrIndex):
-        name = self.pool.getImageColumnName(nameOrIndex)
-        return self.columnDataByType[Field.Image][name]
+    def getImageColumnData(self, name):
+        return self.columnDataByType[Field.Image].get(name, MediaColumnData())
 
-    def getAttributeData(self, nameOrIndex):
-        name = self.pool.getAttributeName(nameOrIndex)
-        return self.attributeData[name]
+    def getAttributeData(self, name):
+        return self.attributeData.get(name, AttributeData())
 
-    def setTextColumnData(self, nameOrIndex, data):
-        name = self.pool.getTextColumnName(nameOrIndex)
+    def setColumnData(self, column, data):
+        self.columnDataByType[column.type][column.name] = data
+        self.columnData[column.name] = data
+
+    def setTextColumnData(self, name, data):
         self.columnDataByType[Field.Text][name] = data
         self.columnData[name] = data
 
-    def setAudioColumnData(self, nameOrIndex, data):
-        name = self.pool.getTextColumnName(nameOrIndex)
+    def setAudioColumnData(self, name, data):
         self.columnDataByType[Field.Audio][name] = data
         self.columnData[name] = data
 
-    def setVideoColumnData(self, nameOrIndex, data):
-        name = self.pool.getTextColumnName(nameOrIndex)
+    def setVideoColumnData(self, name, data):
         self.columnDataByType[Field.Video][name] = data
         self.columnData[name] = data
 
-    def setImageColumnData(self, nameOrIndex, data):
-        name = self.pool.getTextColumnName(nameOrIndex)
+    def setImageColumnData(self, name, data):
         self.columnDataByType[Field.Image][name] = data
         self.columnData[name] = data
 
-    def setAttributeData(self, nameOrIndex, data):
-        name = self.pool.getAttributeName(nameOrIndex)
+    def setAttributeData(self, nameOrAttribute, data):
+        if isinstance(nameOrAttribute, Attribute):
+            name = nameOrAttribute.name
+        else:
+            name = nameOrAttribute
         self.attributeData[name] = data
 
-    def getDefinitions(self, nameOrIndex):
-        return self.getTextColumnData(nameOrIndex).values
+    def getDefinitions(self, name):
+        return self.getTextColumnData(name).values
 
-    def getAlternatives(self, nameOrIndex):
-        return self.getTextColumnData(nameOrIndex).alternatives
+    def getAlternatives(self, name):
+        return self.getTextColumnData(name).alternatives
 
-    def getHiddenAlternatives(self, nameOrIndex):
-        return self.getTextColumnData(nameOrIndex).hiddenAlternatives
+    def getHiddenAlternatives(self, name):
+        return self.getTextColumnData(name).hiddenAlternatives
 
-    def getTypingCorrects(self, nameOrIndex):
-        return self.getTextColumnData(nameOrIndex).typingCorrects
+    def getTypingCorrects(self, name):
+        return self.getTextColumnData(name).typingCorrects
 
-    def getAttributes(self, nameOrIndex):
-        return self.getAttributeData(nameOrIndex).values
+    def getAttributes(self, name):
+        return self.getAttributeData(name).values
 
-    def getAudioFiles(self, nameOrIndex):
-        return self.getAudioColumnData(nameOrIndex).getFiles()
+    def getAudioFiles(self, name):
+        return self.getAudioColumnData(name).getFiles()
 
-    def setAudioFiles(self, nameOrIndex, files):
-        return self.getAudioColumnData(nameOrIndex).setFiles(files)
+    def setAudioFiles(self, name, files):
+        return self.getAudioColumnData(name).setFiles(files)
 
-    def getVideoFiles(self, nameOrIndex):
-        return self.getVideoColumnData(nameOrIndex).getFiles()
+    def getVideoFiles(self, name):
+        return self.getVideoColumnData(name).getFiles()
 
-    def setVideoFiles(self, nameOrIndex, files):
-        return self.getVideoColumnData(nameOrIndex).setFiles(files)
+    def setVideoFiles(self, name, files):
+        return self.getVideoColumnData(name).setFiles(files)
 
-    def getImageFiles(self, nameOrIndex):
-        return self.getImageColumnData(nameOrIndex).getFiles()
+    def getImageFiles(self, name):
+        return self.getImageColumnData(name).getFiles()
 
-    def setImageFiles(self, nameOrIndex, files):
-        return self.getImageColumnData(nameOrIndex).setFiles(files)
+    def setImageFiles(self, name, files):
+        return self.getImageColumnData(name).setFiles(files)
 
-    def getAudioUrls(self, nameOrIndex):
-        return self.getAudioColumnData(nameOrIndex).getRemoteUrls()
+    def getAudioUrls(self, name):
+        return self.getAudioColumnData(name).getRemoteUrls()
 
-    def getVideoUrls(self, nameOrIndex):
-        return self.getVideoColumnData(nameOrIndex).getRemoteUrls()
+    def getVideoUrls(self, name):
+        return self.getVideoColumnData(name).getRemoteUrls()
 
-    def getImageUrls(self, nameOrIndex):
-        return self.getImageColumnData(nameOrIndex).getRemoteUrls()
+    def getImageUrls(self, name):
+        return self.getImageColumnData(name).getRemoteUrls()
 
-    def setLocalAudioUrls(self, nameOrIndex, urls):
-        self.getAudioColumnData(nameOrIndex).setLocalUrls(urls)
+    def setLocalAudioUrls(self, name, urls):
+        self.getAudioColumnData(name).setLocalUrls(urls)
 
-    def getLocalAudioUrls(self, nameOrIndex):
-        return self.getAudioColumnData(nameOrIndex).getLocalUrls()
+    def getLocalAudioUrls(self, name):
+        return self.getAudioColumnData(name).getLocalUrls()
 
-    def setLocalVideoUrls(self, nameOrIndex, urls):
-        self.getVideoColumnData(nameOrIndex).setLocalUrls(urls)
+    def setLocalVideoUrls(self, name, urls):
+        self.getVideoColumnData(name).setLocalUrls(urls)
 
-    def getLocalVideoUrls(self, nameOrIndex):
-        return self.getVideoColumnData(nameOrIndex).getLocalUrls()
+    def getLocalVideoUrls(self, name):
+        return self.getVideoColumnData(name).getLocalUrls()
 
-    def setLocalImageUrls(self, nameOrIndex, urls):
-        self.getImageColumnData(nameOrIndex).setLocalUrls(urls)
+    def setLocalImageUrls(self, name, urls):
+        self.getImageColumnData(name).setLocalUrls(urls)
 
-    def getLocalImageUrls(self, nameOrIndex):
-        return self.getImageColumnData(nameOrIndex).getLocalUrls()
-
-class ThingLoader(object):
-    def __init__(self, pool):
-        self.pool = pool
-
-    def loadThing(self, row, fixUrl=lambda url: url):
-        thing = Thing(row['id'])
-        thing.pool = self.pool
-
-        for column in self.pool.getTextColumns():
-            cell = row['columns'].get(str(column.index), {})
-            data = TextColumnData()
-            data.values = self.__getDefinitions(cell)
-            data.alternatives = self.__getAlternatives(cell)
-            data.hiddenAlternatives = self.__getHiddenAlternatives(cell)
-            data.typingCorrects = self.__getTypingCorrects(cell)
-            thing.setTextColumnData(column.name, data)
-
-        for column in self.pool.getAudioColumns():
-            cell = row['columns'].get(str(column.index), {})
-            data = MediaColumnData()
-            data.setRemoteUrls(list(map(fixUrl, self.__getUrls(cell))))
-            thing.setAudioColumnData(column.name, data)
-
-        for column in self.pool.getVideoColumns():
-            cell = row['columns'].get(str(column.index), {})
-            data = MediaColumnData()
-            data.setRemoteUrls(list(map(fixUrl, self.__getUrls(cell))))
-            thing.setVideoColumnData(column.name, data)
-
-        for column in self.pool.getImageColumns():
-            cell = row['columns'].get(str(column.index), {})
-            data = MediaColumnData()
-            data.setRemoteUrls(list(map(fixUrl, self.__getUrls(cell))))
-            thing.setImageColumnData(column.name, data)
-
-        for attribute in self.pool.getAttributes():
-            cell = row['attributes'].get(str(attribute.index), {})
-            data = AttributeData()
-            data.values = self.__getAttributes(cell)
-            thing.setAttributeData(attribute.name, data)
-
-        return thing
-
-    @staticmethod
-    def __getDefinitions(cell):
-        return list(map(str.strip, cell.get("val", "").split(",")))
-
-    @staticmethod
-    def __getAlternatives(cell):
-        data = []
-        for alt in cell.get("alts", []):
-            value = alt.get('val', "")
-            if value and not value.startswith("_"):
-                data.append(value)
-        return data
-
-    @staticmethod
-    def __getHiddenAlternatives(cell):
-        data = []
-        for alt in cell.get("alts", []):
-            value = alt.get('val', "")
-            if value and value.startswith("_"):
-                data.append(value.lstrip("_"))
-        return data
-
-    @staticmethod
-    def __getTypingCorrects(cell):
-        data = []
-        for _, typing_corrects in list(cell.get("typing_corrects", {}).items()):
-            for value in typing_corrects:
-                if value:
-                    data.append(value)
-        return data
-
-    @staticmethod
-    def __getUrls(cell):
-        data = []
-        for value in cell.get("val", []):
-            url = value.get("url", "")
-            if url:
-                data.append(url)
-        return data
-
-    @staticmethod
-    def __getAttributes(cell):
-        return list(map(str.strip, cell.get("val", "").split(",")))
+    def getLocalImageUrls(self, name):
+        return self.getImageColumnData(name).getLocalUrls()
 
 class CourseLoader(object):
     def __init__(self, service):
         self.service = service
         self.observers = []
         self.levelCount = 0
-        self.thingCount = 0
-        self.directionThing = {}
-        self.uniquifyPoolName = NameUniquifier()
+        self.learnableCount = 0
 
     def registerObserver(self, observer):
         self.observers.append(observer)
@@ -620,15 +431,13 @@ class CourseLoader(object):
 
         courseData = self.service.loadCourseData(course.id)
 
-        course.title = sanitizeName(courseData["session"]["course"]["name"], "Course")
-        course.description = courseData["session"]["course"]["description"]
-        course.source = courseData["session"]["course"]["source"]["name"]
-        course.target = courseData["session"]["course"]["target"]["name"]
-        self.levelCount = courseData["session"]["course"]["num_levels"]
-        self.thingCount = courseData["session"]["course"]["num_things"]
+        course.title = sanitizeName(courseData["title"], "Course")
+        course.description = courseData["description"]
+        self.levelCount = courseData["num_levels"]
+        self.learnableCount = courseData["num_learnables"]
 
         self.notify('levelCountChanged', self.levelCount)
-        self.notify('thingCountChanged', self.thingCount)
+        self.notify('thingCountChanged', self.learnableCount)
 
         for levelIndex in range(1,self.levelCount+1):
             try:
@@ -641,125 +450,81 @@ class CourseLoader(object):
 
         return course
 
-    def loadPool(self, data):
-        pool = Pool(data["id"])
-        pool.name = self.uniquifyPoolName(sanitizeName(data["name"], "Pool"))
-
-        for index, column in sorted(data["columns"].items()):
-            pool.addColumn(column['kind'], column['label'], index)
-
-        for index, attribute in sorted(data["attributes"].items()):
-            pool.addAttribute(attribute['kind'], attribute['label'], index)
-
-        return pool
-
     @staticmethod
-    def loadScheduleInfo(data, pool):
-        direction = Direction()
-        direction.front = pool.getColumnName(data["column_b"])
-        direction.back = pool.getColumnName(data["column_a"])
-
-        scheduleInfo = pool.schedule.get(direction, data['thing_id'])
-        if not scheduleInfo:
-            scheduleInfo = ScheduleInfo()
-
-        scheduleInfo.thingId = data['thing_id']
-        scheduleInfo.direction = direction
-        scheduleInfo.ignored = data['ignored']
-        scheduleInfo.interval = data['interval']
-        scheduleInfo.correct = data.get('correct', 0)
-        scheduleInfo.incorrect = data.get('attempts', 0) - data.get('correct', 0)
-        scheduleInfo.total = data.get('attempts', 0)
-        scheduleInfo.streak = data['current_streak']
-        scheduleInfo.due = utcToLocal(datetime.datetime.strptime(data['next_date'], "%Y-%m-%dT%H:%M:%SZ"))
-        return scheduleInfo
-
-    @staticmethod
-    def loadMem(data, memData, pool, fixUrl=lambda url: url):
-        mem = Mem(memData['id'])
-        mem.thingId = data['thing_id']
-        mem.direction.front = pool.getColumnName(data["column_b"])
-        mem.direction.back = pool.getColumnName(data["column_a"])
-        text = memData['text']
-        if memData['image_output_url']:
-            text = "img:{}".format(memData['image_output_url'])
-        mem.text, remoteImageUrls = memrise_markdown.convertAndReturnImages(text)
-        mem.images.extend(list(map(DownloadableFile, list(map(fixUrl, remoteImageUrls)))))
-        for before, after in zip(remoteImageUrls, [im.remoteUrl for im in mem.images]):
-            if after != before:
-                mem.text = mem.text.replace(before, after)
-        return mem
+    def loadProgress(learnable, data):
+        learnable.progress.ignored = data['ignored']
+        learnable.progress.last_date = utcToLocal(datetime.datetime.strptime(data['last_date'], "%Y-%m-%dT%H:%M:%SZ"))
+        learnable.progress.created_date = utcToLocal(datetime.datetime.strptime(data['created_date'], "%Y-%m-%dT%H:%M:%SZ"))
+        learnable.progress.next_date = utcToLocal(datetime.datetime.strptime(data['next_date'], "%Y-%m-%dT%H:%M:%SZ"))
+        learnable.progress.interval = data['interval']
+        learnable.progress.growth_level = data['growth_level']
+        learnable.progress.attempts = data.get('attempts', 0)
+        learnable.progress.correct = data.get('correct', 0)
+        learnable.progress.incorrect = data.get('attempts', 0) - data.get('correct', 0)
+        learnable.progress.total_streak = data['total_streak']
+        learnable.progress.current_streak = data['current_streak']
+        return learnable.progress
 
     def loadLevel(self, course, levelIndex):
         levelData = self.service.loadLevelData(course.id, levelIndex)
+        
+        if levelData.get('code') is not None:
+            return None
 
-        level = Level(levelData["session"]["level"]["id"])
-        level.index = levelData["session"]["level"]["index"]
-        level.title = sanitizeName(levelData["session"]["level"]["title"])
+        level = Level(levelData["session_source_info"]["level_id"])
+        level.index = levelData["session_source_info"]["source_sub_index"]
+        level.title = sanitizeName(levelData["session_source_info"]["level_name"])
         level.course = course
 
-        poolId = levelData["session"]["level"]["pool_id"]
-        if not poolId in course.pools:
-            poolData = self.service.loadPoolData(poolId)
-            pool = self.loadPool(poolData)
-            pool.course = course
-            course.pools[poolId] = pool
-        level.pool = course.pools[poolId]
-
-        level.direction.front = level.pool.getColumnName(levelData["session"]["level"]["column_b"])
-        level.direction.back = level.pool.getColumnName(levelData["session"]["level"]["column_a"])
-
-        thingusers = {userData["thing_id"]: userData for userData in levelData["thingusers"]}
-
-        for learnable in levelData["learnables"]:
-            thingId = learnable['thing_id']
-            if course.hasThing(thingId):
-                thing = course.getThing(thingId)
+        for learnableData in levelData["learnables"]:
+            learnableId = learnableData['id']
+            if course.hasLearnable(learnableId):
+                learnable = course.getLearnable(learnableId)
             else:
-                thingData = self.service.loadThingData(thingId)
-                if thingData["pool_id"] == level.pool.id:
-                    pool = level.pool
-                else:
-                    if not thingData["pool_id"] in course.pools:
-                        poolData = self.service.loadPoolData(thingData["pool_id"])
-                        pool = self.loadPool(poolData)
-                        pool.course = course
-                        course.pools[pool.id] = pool
-                    pool = course.pools[thingData["pool_id"]]
-                thingLoader = ThingLoader(pool)
-                thing = thingLoader.loadThing(thingData, self.service.toAbsoluteMediaUrl)
-                thing.pool.addThing(thing)
-            level.things.append(thing)
+                learnable = Learnable(learnableId)
+                learnable.progress.position = course.getNextPosition()
+                learnable.course = course
+                for screen in learnableData["screens"].values():
+                    if screen['template'] == 'presentation':
+                        learnable.direction = Direction(screen['item']['label'], screen['definition']['label'])
+                        for col in itertools.chain([screen['item'], screen['definition'], screen['audio'], screen['video']], screen['visible_info'], screen['hidden_info']):
+                            if not col:
+                                continue
+                            column = course.getColumn(col['label'])
+                            if not column:
+                                column = course.addColumn(col['kind'], col['label'], col['direction'])
+                            if col['kind'] in ['audio', 'image', 'video']:   
+                                data = MediaColumnData()
+                                data.setRemoteUrls(list(map(lambda x: self.service.toAbsoluteMediaUrl(x['normal']), col['value'])))
+                            elif col["kind"] == 'text':
+                                data = TextColumnData()
+                                data.values = list(map(str.strip, col['value'].split(",")))
+                                data.alternatives = list(filter(lambda x: x and not x.startswith("_"), col['alternatives']))
+                                data.hiddenAlternatives = list(filter(lambda x: x and x.startswith("_"), col['alternatives']))
+                                data.typingCorrects = []
+                            learnable.setColumnData(column, data)
+                        for attr in screen['attributes']:
+                            if not attr:
+                                continue
+                            attribute = course.getAttribute(attr['label'])
+                            if not attribute:
+                                attribute = course.addAttribute(Field.Text, attr['label'])
+                            data = AttributeData()
+                            data.values = list(map(str.strip, attr['value'].split(",")))
+                            learnable.setAttributeData(attribute, data)
+                    elif screen['template'] == 'typing':
+                        column = course.getColumn(screen['answer']['label'])
+                        if column:
+                            learnable.getColumnData(column).typingCorrects = list(filter(lambda x: x != '', screen['correct']))
+                
+                level.addLearnable(learnable)
 
-            direction = Direction()
-            direction.front = thing.pool.getColumnName(levelData["session"]["level"]["column_b"])
-            direction.back = thing.pool.getColumnName(levelData["session"]["level"]["column_a"])
-            if (direction.front is None or direction.back is None):
-                continue
-            thing.pool.directions.add(direction)
+            for progressData in levelData["progress"]:
+                learnable = level.getLearnable(int(progressData['learnable_id']))
+                if learnable:
+                    self.loadProgress(learnable, progressData)
 
-            scheduleInfo = ScheduleInfo()
-            scheduleInfo.thingId = thing.id
-            scheduleInfo.direction = direction
-            scheduleInfo.position = course.getNextPosition()
-            thing.pool.schedule.add(scheduleInfo)
-
-            if thing.id in thingusers:
-                userData = thingusers[thing.id]
-                thing.pool.schedule.add(self.loadScheduleInfo(userData, thing.pool))
-                if userData["mem_id"] and not thing.pool.mems.has(direction, thing):
-                    try:
-                        memData = self.service.loadMemData(userData["mem_id"], userData["thing_id"], int(userData["learnable_id"]), userData["column_a"], userData["column_b"])
-                        thing.pool.mems.add(self.loadMem(userData, memData, thing.pool, self.service.toAbsoluteMediaUrl))
-                    except MemNotFoundError:
-                        pass
-
-            if thing.id in self.directionThing.get(direction, {}):
-                self.thingCount += 1
-                self.notify('thingCountChanged', self.thingCount)
-            self.directionThing.setdefault(direction, {})[thing.id] = thing
-
-            self.notify('thingLoaded', thing)
+            self.notify('thingLoaded', learnable)
 
         return level
 
@@ -797,7 +562,7 @@ class IncompleteReadHttpAndHttpsHandler(urllib.request.HTTPHandler, urllib.reque
         return self.do_open_wrapped(http.client.HTTPConnection, req)
 
     def https_open(self, req):
-        return self.do_open_wrapped(http.client.HTTPSConnection, req, context=self._context, check_hostname=self._check_hostname)
+        return self.do_open_wrapped(http.client.HTTPSConnection, req, context=self._context)
 
 class MemriseError(RuntimeError):
     pass
@@ -835,12 +600,16 @@ class Service(object):
             else:
                 raise
 
+    def getCookie(self, name):
+        cookies = requests.utils.dict_from_cookiejar(self.session.cookies)
+        return cookies.get(name)
+
     def isLoggedIn(self):
-        response = self.session.get('https://app.memrise.com/v1.17/me/', headers={'Referer': 'https://www.memrise.com/app'})
+        response = self.session.get('https://community-courses.memrise.com/v1.23/me/', headers={'Referer': 'https://www.memrise.com/app'})
         return response.status_code == 200
 
     def login(self, username, password):
-        signin_page = self.session.get("https://app.memrise.com/signin")
+        signin_page = self.session.get("https://community-courses.memrise.com/signin")
         signin_soup = bs4.BeautifulSoup(signin_page.content, "html.parser")
         info_json = json.loads(signin_soup.select_one("#__NEXT_DATA__").string)
         client_id = info_json["runtimeConfig"]["OAUTH_CLIENT_ID"]
@@ -851,12 +620,12 @@ class Service(object):
             'grant_type': 'password'
         }
 
-        obtain_login_token_res = self.session.post('https://app.memrise.com/v1.17/auth/access_token/', json=signin_data)
+        obtain_login_token_res = self.session.post('https://community-courses.memrise.com/v1.23/auth/access_token/', json=signin_data)
         if not obtain_login_token_res.ok:
             return False
         token = obtain_login_token_res.json()["access_token"]["access_token"]
 
-        actual_login_res = self.session.get('https://app.memrise.com/v1.17/auth/web/', params={'invalidate_token_after': 'true', 'token': token})
+        actual_login_res = self.session.get('https://community-courses.memrise.com/v1.23/auth/web/', params={'invalidate_token_after': 'true', 'token': token})
 
         if not actual_login_res.json()["success"]:
             return False
@@ -871,8 +640,29 @@ class Service(object):
 
     def loadCourseData(self, courseId):
         courseUrl = self.getHtmlCourseUrl(courseId)
-        response = self.openWithRetry(courseUrl)
-        soup = bs4.BeautifulSoup(response.read(), 'html.parser')
+        response = self.session.get(courseUrl)
+        soup = bs4.BeautifulSoup(response.text, 'html.parser')
+
+        data = {
+            'title': '',
+            'description': '',
+            'num_levels': 0,
+            'num_learnables': 0,
+        }
+
+        found = soup.find('h1', {'class': 'course-name'})
+        if found:
+            data['title'] = found.string
+
+        found = soup.find('span', {'class': 'course-description'})
+        if found:
+            data['description'] = found.string
+
+        found = soup.find('div', {'class': 'progress-box-title'})
+        if found:
+            match = re.search(r'([0-9]+)\s*/\s*([0-9]+)', found.contents[0])
+            if match:
+                data['num_learnables'] = int(match.group(2))
 
         levelCount = 0
         if soup.find_all('div', {'class': lambda x: x and 'levels' in x.split()}):
@@ -884,96 +674,60 @@ class Service(object):
 
         if levelCount == 0:
             raise MemriseError("Can't get level count")
+        
+        data['num_levels'] = levelCount
 
-        for levelIndex in range(1,levelCount+1):
-            try:
-                return self.loadLevelData(courseId, levelIndex)
-            except LevelNotFoundError:
-                pass
+        return data
 
     def loadLevelData(self, courseId, levelIndex):
         try:
-            levelUrl = self.getJsonLevelUrl(courseId, levelIndex)
-            response = self.openWithRetry(levelUrl)
-            return json.load(response)
+            level_data = {
+                'session_source_id': courseId,
+                'session_source_sub_index': levelIndex,
+                'session_source_type': 'course_id_and_level_index'
+            }
+            headers = {
+                'X-CSRFToken': self.getCookie('csrftoken'),
+                'Referer': self.getHtmlLevelUrl(courseId, levelIndex)
+            }
+            response = self.session.post(self.getJsonLevelUrl(), json=level_data, headers=headers)
+            return response.json()
         except urllib.error.HTTPError as e:
             if e.code == 404 or e.code == 400:
                 raise LevelNotFoundError("Level not found: {}".format(levelIndex))
             else:
                 raise
 
-    def loadPoolData(self, poolId):
-        poolUrl = self.getJsonPoolUrl(poolId)
-        response = self.openWithRetry(poolUrl)
-        result = json.load(response)
-        return result.get("pool", result)
-
-    def loadThingData(self, thingId):
-        thingUrl = self.getJsonThingUrl(thingId)
-        response = self.openWithRetry(thingUrl)
-        result = json.load(response)
-        return result.get("thing", result)
-
-    def loadMemData(self, memId, thingId, learnableId, colA, colB):
-        try:
-            memUrl = self.getJsonMemUrl(memId, thingId, colA, colB)
-            response = self.openWithRetry(memUrl)
-            result = json.load(response)
-            return result.get("mem", result)
-        except urllib.error.HTTPError as e:
-            if e.code == 404 or e.code == 400:
-                memsUrl = self.getJsonManyMemUrl(thingId, learnableId)
-                response = self.openWithRetry(memsUrl)
-                result = json.load(response)
-                for memData in result.get("mems", {}):
-                    if memData.get('id') == memId:
-                        return memData
-            else:
-                raise
-        raise MemNotFoundError("Mem not found (memId={}, thingId={}, learnableId={}, colA={}, colB={})".format(memId, thingId, learnableId, colA, colB))
-
     @staticmethod
     def getCourseIdFromUrl(url):
-        match = re.match('https://app.memrise.com/course/(\d+)/.+/', url)
+        match = re.match(r'https://community-courses.memrise.com/community/course/(\d+)/.+/', url)
         if not match:
             raise MemriseError("Import failed. Does your URL look like the sample URL above?")
         return int(match.group(1))
 
     @staticmethod
     def checkCourseUrl(url):
-        match = re.match('https://app.memrise.com/course/\d+/.+/', url)
+        match = re.match(r'https://community-courses.memrise.com/community/course/\d+/.+/', url)
         return bool(match)
 
     @staticmethod
     def getHtmlCourseUrl(courseId):
-        return 'https://app.memrise.com/course/{:d}/'.format(courseId)
+        return 'https://community-courses.memrise.com/community/course/{:d}/'.format(courseId)
 
     @staticmethod
-    def getJsonLevelUrl(courseId, levelIndex):
-        return "https://app.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
+    def getHtmlLevelUrl(courseId, levelIndex):
+        return 'https://community-courses.memrise.com/aprender/preview?course_id={:d}&level_index={:d}'.format(courseId, levelIndex)
 
     @staticmethod
-    def getJsonPoolUrl(poolId):
-        return "https://app.memrise.com/api/pool/get/?pool_id={:d}".format(poolId)
-
-    @staticmethod
-    def getJsonThingUrl(thingId):
-        return "https://app.memrise.com/api/thing/get/?thing_id={:d}".format(thingId)
-
-    @staticmethod
-    def getJsonMemUrl(memId, thingId, colA, colB):
-        return "https://app.memrise.com/api/mem/get/?mem_id={:d}&thing_id={:d}&column_a={:d}&column_b={:d}".format(memId, thingId, colA, colB)
-
-    @staticmethod
-    def getJsonManyMemUrl(thingId, learnableId):
-        return "https://app.memrise.com/api/mem/get_many_for_thing/?thing_id={:d}&learnable_id={:d}".format(thingId, learnableId)
+    def getJsonLevelUrl():
+        return "https://community-courses.memrise.com/v1.23/learning_sessions/preview/"
 
     @staticmethod
     def toAbsoluteMediaUrl(url):
         if not url:
             return url
         # fix wrong urls: /static/xyz should map to https://static.memrise.com/xyz
-        url = re.sub("^\/static\/", "/", url)
+        url = re.sub(r"^\/static\/", "/", url)
         return urllib.parse.urljoin("http://static.memrise.com/", url)
 
     def downloadMedia(self, url, skipExisting=False):

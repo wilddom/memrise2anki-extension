@@ -1,7 +1,7 @@
 memrise2anki-extension
 ======================
 
-An extension for Anki 2.1 that downloads and converts a course from Memrise into an Anki deck.
+An extension for Anki 25 which downloads and converts a course from Memrise into an Anki deck.
 
 How to install
 --------------
@@ -35,10 +35,10 @@ Field mapping
 The field mapper allows to freely configure the fields from Memrise to the fields of the selected note type.
 Multiple Memrise fields can be merged to one note field. This allows the reuse of existing note types without much hassle.
 
-The *Thing*
+The *Learnable*
 -----------
 
-The special field named *Thing* is used to identify existing notes when a previously downloaded deck is updated.
+The special field named *Learnable* is used to identify existing notes when a previously downloaded deck is updated.
 This allows to update already downloaded notes without losing card statistics. Removing or renaming this field
 results in duplicated entries. **Therefore you are strongly encouraged to keep this field**.
 
@@ -59,10 +59,7 @@ assign the existing template to a testing direction.
 Mems
 ----
 
-The import of your mems from Memrise is possible. A mem is assigned to a testing direction (front to back), therefore a field needs
-to be created for each direction. This means that only the mems selected by the currently logged in user are imported. As Anki
-does not officially support embedded media (youtube, etc.) the option to embed online media is experimental, embedded media
-may or may not work depending on your platform. If the option is disabled (default), a link will be shown instead.
+Unfortunately the import of your mems from Memrise is no longer possible.
 
 
 Bug Reports
