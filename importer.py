@@ -868,7 +868,7 @@ class MemriseImportDialog(QDialog):
 									card.ivl = int(round(scheduleInfo.interval))
 									card.reps = scheduleInfo.attempts
 									card.lapses = scheduleInfo.incorrect
-									card.due = mw.col.sched.today + (scheduleInfo.next_date.date() - datetime.date.today()).days
+									card.due = mw.col.sched.today + (scheduleInfo.next_date.date() - datetime.datetime.now(datetime.UTC).date()).days
 									card.factor = 2500
 								card.flush()
 							if scheduleInfo.ignored:

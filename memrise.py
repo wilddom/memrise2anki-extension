@@ -3,10 +3,6 @@ import re, time, os.path, json, collections, datetime, functools, uuid, errno, i
 import bs4
 import requests.sessions
 
-def utcToLocal(utcDt):
-    offset = datetime.datetime.fromtimestamp(86400)-datetime.datetime.utcfromtimestamp(86400)
-    return utcDt+offset
-
 def sanitizeName(name, default=""):
     name = re.sub(r"<.*?>", "", name)
     name = re.sub(r"\s\s+", "", name)
@@ -453,9 +449,9 @@ class CourseLoader(object):
     @staticmethod
     def loadProgress(learnable, data):
         learnable.progress.ignored = data['ignored']
-        learnable.progress.last_date = utcToLocal(datetime.datetime.strptime(data['last_date'], "%Y-%m-%dT%H:%M:%SZ"))
-        learnable.progress.created_date = utcToLocal(datetime.datetime.strptime(data['created_date'], "%Y-%m-%dT%H:%M:%SZ"))
-        learnable.progress.next_date = utcToLocal(datetime.datetime.strptime(data['next_date'], "%Y-%m-%dT%H:%M:%SZ"))
+        learnable.progress.last_date = datetime.datetime.fromisoformat(data['last_date']).replace(tzinfo=datetime.UTC)
+        learnable.progress.created_date = datetime.datetime.fromisoformat(data['created_date']).replace(tzinfo=datetime.UTC)
+        learnable.progress.next_date = datetime.datetime.fromisoformat(data['next_date']).replace(tzinfo=datetime.UTC)
         learnable.progress.interval = data['interval']
         learnable.progress.growth_level = data['growth_level']
         learnable.progress.attempts = data.get('attempts', 0)
