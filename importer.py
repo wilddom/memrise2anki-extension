@@ -45,12 +45,10 @@ class MemriseCourseLoader(QObject):
 			self.sender.totalLoadedChanged.emit(self.totalLoaded)
 
 		def downloadMedia(self, learnable):
-			for colName in learnable.course.getImageColumnNames():
-				for image in [f for f in learnable.getImageFiles(colName) if not f.isDownloaded()]:
-					image.localUrl = self.sender.download(image.remoteUrl)
-			for colName in learnable.course.getAudioColumnNames():
-				for audio in [f for f in learnable.getAudioFiles(colName) if not f.isDownloaded()]:
-					audio.localUrl = self.sender.download(audio.remoteUrl)
+			for fieldType in [memrise.FieldType.Image, memrise.FieldType.Audio, memrise.FieldType.Video]:
+				for colName in learnable.course.getColumnNames(fieldType):
+					for media in [f for f in learnable.getColumnData(colName, fieldType).getFiles() if not f.isDownloaded()]:
+						media.localUrl = self.sender.download(media.remoteUrl)
 
 		def thingLoaded(self, learnable):
 			if learnable and self.sender.downloadMedia:
@@ -244,11 +242,11 @@ class ModelMappingDialog(QDialog):
 		notFrontBack = partial(lambda fieldname, filtered=[]: fieldname not in filtered, filtered=[front,back])
 
 		t['qfmt'] = "{{"+front+"}}\n"
-		if front in course.getTextColumnNames():
+		if front in course.getColumnNames(memrise.FieldType.Text):
 			frontAlternatives = "{} {}".format(front, "Alternatives")
 			t['qfmt'] += "{{#"+frontAlternatives+"}}<br /><span class=\"alts\">{{"+frontAlternatives+"}}</span>{{/"+frontAlternatives+"}}\n"
 
-		for colName in filter(notFrontBack, course.getTextColumnNames()):
+		for colName in filter(notFrontBack, course.getColumnNames(memrise.FieldType.Text)):
 			t['qfmt'] += "<br />{{"+colName+"}}\n"
 			altColName = "{} {}".format(colName, "Alternatives")
 			t['qfmt'] += "{{#"+altColName+"}}<br /><span class=\"alts\">{{"+altColName+"}}</span>{{/"+altColName+"}}\n"
@@ -257,21 +255,21 @@ class ModelMappingDialog(QDialog):
 			t['qfmt'] += "{{#"+attrName+"}}<br /><span class=\"attrs\">({{"+attrName+"}})</span>{{/"+attrName+"}}\n"
 
 		t['afmt'] = "{{FrontSide}}\n\n<hr id=\"answer\" />\n\n"+"{{"+back+"}}\n"
-		if back in course.getTextColumnNames():
+		if back in course.getColumnNames(memrise.FieldType.Text):
 			backAlternatives = "{} {}".format(back, "Alternatives")
 			t['afmt'] += "{{#"+backAlternatives+"}}<br /><span class=\"alts\">{{"+backAlternatives+"}}</span>{{/"+backAlternatives+"}}\n"
 
-		if front in course.getTextColumnNames() and front == course.getTextColumnNames()[0]:
+		if front in course.getColumnNames(memrise.FieldType.Text) and front == course.getColumnNames(memrise.FieldType.Text)[0]:
 			imageside = 'afmt'
 			audioside = 'qfmt'
 		else:
 			imageside = 'qfmt'
 			audioside = 'afmt'
 
-		for colName in filter(notFrontBack, course.getImageColumnNames()):
+		for colName in filter(notFrontBack, course.getColumnNames(memrise.FieldType.Image)):
 			t[imageside] += "{{#"+colName+"}}<br />{{"+colName+"}}{{/"+colName+"}}\n"
 
-		for colName in filter(notFrontBack, course.getAudioColumnNames()):
+		for colName in filter(notFrontBack, course.getColumnNames(memrise.FieldType.Audio)):
 			t[audioside] += "{{#"+colName+"}}<div style=\"display:none;\">{{"+colName+"}}</div>{{/"+colName+"}}\n"
 
 		return t
@@ -282,7 +280,7 @@ class ModelMappingDialog(QDialog):
 		name = "Memrise - {}".format(course.title)
 		m = mm.new(name)
 
-		for colName in course.getTextColumnNames():
+		for colName in course.getColumnNames(memrise.FieldType.Text):
 			dfm = mm.new_field(colName)
 			mm.add_field(m, dfm)
 			afm = mm.new_field("{} {}".format(colName, "Alternatives"))
@@ -296,11 +294,11 @@ class ModelMappingDialog(QDialog):
 			fm = mm.new_field(attrName)
 			mm.add_field(m, fm)
 
-		for colName in course.getImageColumnNames():
+		for colName in course.getColumnNames(memrise.FieldType.Image):
 			fm = mm.new_field(colName)
 			mm.add_field(m, fm)
 
-		for colName in course.getAudioColumnNames():
+		for colName in course.getColumnNames(memrise.FieldType.Audio):
 			fm = mm.new_field(colName)
 			mm.add_field(m, fm)
 
@@ -438,18 +436,17 @@ class FieldHelper(object):
 		self.field = field
 		if getter is None:
 			if isinstance(field, memrise.Column):
-				if field.type == memrise.Field.Text:
-					getter = memrise.Learnable.getDefinitions
-				elif field.type == memrise.Field.Audio:
-					getter = memrise.Learnable.getLocalAudioUrls
-				elif field.type == memrise.Field.Image:
-					getter = memrise.Learnable.getLocalImageUrls
+				if field.type == memrise.FieldType.Text:
+					getter = lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Text).values
+				elif field.type == memrise.FieldType.Audio:
+					getter = lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Audio).getLocalUrls()
+				elif field.type == memrise.FieldType.Image:
+					getter = lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Image).getLocalUrls()
+				elif field.type == memrise.FieldType.Video:
+					getter = lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Video).getLocalUrls()
 			elif isinstance(field, memrise.Attribute):
-				if field.type == memrise.Field.Text:
-					getter = memrise.Learnable.getAttributes
-			elif isinstance(field, memrise.Field):
-				if field.type == memrise.Field.Mem:
-					getter = None
+				if field.type == memrise.FieldType.Text:
+					getter = lambda l,f: memrise.Learnable.getAttributeData(l,f).values
 		self.getter = getter
 		self.name = name
 
@@ -522,21 +519,23 @@ class FieldMappingDialog(QDialog):
 		fieldSelection = QComboBox()
 		fieldSelection.addItem("--- None ---")
 		fieldSelection.insertSeparator(1)
-		for column in course.getTextColumns():
+		for column in course.getColumns(memrise.FieldType.Text):
 			fieldSelection.addItem("Text: {}".format(column.name),
-								FieldHelper(column, memrise.Learnable.getDefinitions))
+								FieldHelper(column, lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Text).values))
 			fieldSelection.addItem("{1}: {0}".format(column.name, "Alternatives"),
-								FieldHelper(column, memrise.Learnable.getAlternatives, "{} {}".format(column.name, "Alternatives")))
+								FieldHelper(column, lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Text).alternatives, "{} {}".format(column.name, "Alternatives")))
 			fieldSelection.addItem("{1}: {0}".format(column.name, "Hidden Alternatives"),
-								FieldHelper(column, memrise.Learnable.getHiddenAlternatives, "{} {}".format(column.name, "Hidden Alternatives")))
+								FieldHelper(column, lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Text).hiddenAlternatives, "{} {}".format(column.name, "Hidden Alternatives")))
 			fieldSelection.addItem("{1}: {0}".format(column.name, "Typing Corrects"),
-								FieldHelper(column, memrise.Learnable.getTypingCorrects, "{} {}".format(column.name, "Typing Corrects")))
-		for column in course.getImageColumns():
-			fieldSelection.addItem("Image: {}".format(column.name), FieldHelper(column, memrise.Learnable.getLocalImageUrls))
-		for column in course.getAudioColumns():
-			fieldSelection.addItem("Audio: {}".format(column.name), FieldHelper(column, memrise.Learnable.getLocalAudioUrls))
+								FieldHelper(column, lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Text).typingCorrects, "{} {}".format(column.name, "Typing Corrects")))
+		for column in course.getColumns(memrise.FieldType.Image):
+			fieldSelection.addItem("Image: {}".format(column.name), FieldHelper(column, lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Image).getLocalUrls()))
+		for column in course.getColumns(memrise.FieldType.Audio):
+			fieldSelection.addItem("Audio: {}".format(column.name), FieldHelper(column, lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Audio).getLocalUrls()))
+		for column in course.getColumns(memrise.FieldType.Video):
+			fieldSelection.addItem("Video: {}".format(column.name), FieldHelper(column, lambda l,f: memrise.Learnable.getColumnData(l,f, memrise.FieldType.Video).getLocalUrls()))
 		for attribute in course.getAttributes():
-			fieldSelection.addItem("Attribute: {}".format(attribute.name), FieldHelper(attribute, memrise.Learnable.getAttributes))
+			fieldSelection.addItem("Attribute: {}".format(attribute.name), FieldHelper(attribute, lambda l,f: memrise.Learnable.getAttributeData(l,f).values))
 
 		return fieldSelection
 
@@ -551,7 +550,7 @@ class FieldMappingDialog(QDialog):
 		self.grid.addWidget(label2, 0, 1)
 
 		fieldNames = [fieldName for fieldName in self.col.models.field_names(model) if not fieldName in ['Learnable', 'Level']]
-		courseFieldCount = course.countTextColumns()*4 + course.countImageColumns() + course.countAudioColumns() + course.countAttributes()
+		courseFieldCount = course.countColumns(memrise.FieldType.Text)*4 + course.countColumns(memrise.FieldType.Image) + course.countColumns(memrise.FieldType.Audio) + course.countAttributes()
 
 		mapping = []
 		for index in range(0, max(len(fieldNames), courseFieldCount)):
@@ -768,14 +767,12 @@ class MemriseImportDialog(QDialog):
 
 	def getWithSpec(self, learnable, spec):
 		values = spec.get(learnable)
-		if spec.field.type == memrise.Field.Text:
+		if spec.field.type == memrise.FieldType.Text:
 			return list(map(self.prepareText, values))
-		elif spec.field.type == memrise.Field.Image:
+		elif spec.field.type == memrise.FieldType.Image:
 			return list(map(self.prepareImage, list(filter(bool, values))))
-		elif spec.field.type == memrise.Field.Audio:
+		elif spec.field.type == memrise.FieldType.Audio:
 			return list(map(self.prepareAudio, list(filter(bool, values))))
-		elif spec.field.type == memrise.Field.Mem:
-			return [self.prepareHtml(values.get())]
 
 		return None
 

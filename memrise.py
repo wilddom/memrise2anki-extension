@@ -1,5 +1,5 @@
 import urllib.request, urllib.error, urllib.parse, http.cookiejar, http.client
-import re, time, os.path, json, collections, datetime, functools, uuid, errno, itertools, hashlib
+import re, os.path, json, collections, datetime, uuid, itertools, hashlib, enum
 import bs4
 import requests.adapters, requests.sessions
 from urllib3.util.retry import Retry
@@ -33,26 +33,26 @@ class Direction(object):
     def __str__(self):
         return "{} -> {}".format(self.front, self.back)
 
-class Field(object):
+class FieldType(enum.StrEnum):
     Text = 'text'
     Audio = 'audio'
     Image = 'image'
     Video = 'video'
-    Mem = 'mem'
 
+class Field(object):
     def __init__(self, fieldType, name):
         self.type = fieldType
         self.name = name
 
 class Column(Field):
-    Types = [Field.Text, Field.Audio, Field.Image, Field.Video]
+    Types = [FieldType.Text, FieldType.Audio, FieldType.Image, FieldType.Video]
 
-    def __init__(self, colType, name, direction):
+    def __init__(self, colType, name, side):
         super(Column, self).__init__(colType, name)
-        self.direction = direction
+        self.side = side
 
 class Attribute(Field):
-    Types = [Field.Text]
+    Types = [FieldType.Text]
 
     def __init__(self, attrType, name):
         super(Attribute, self).__init__(attrType, name)
@@ -115,11 +115,11 @@ class Course(object):
     def getDirections(self):
         return list(set(itertools.chain(*map(lambda x: x.getDirections(), self.levels))))
 
-    def addColumn(self, colType, name, direction):
+    def addColumn(self, colType, name, side):
         if not colType in Column.Types:
             return None
 
-        column = Column(colType, sanitizeName(name, "Column"), direction)
+        column = Column(colType, sanitizeName(name, "Column"), side)
         self.columns[column.name] = column
         self.columnsByType[column.type][column.name] = column
         return column
@@ -138,74 +138,46 @@ class Course(object):
     def getAttribute(self, name):
         return self.attributes.get(sanitizeName(name, "Attribute"))
 
-    def getColumnNames(self):
-        return list(self.columns.keys())
+    def getColumnNames(self, fieldType=None):
+        if fieldType is None:
+            return list(self.columns.keys())
+        return self.getColumnNamesByType(fieldType)
 
-    def getTextColumnNames(self):
-        return list(self.columnsByType[Field.Text].keys())
-
-    def getImageColumnNames(self):
-        return list(self.columnsByType[Field.Image].keys())
-
-    def getAudioColumnNames(self):
-        return list(self.columnsByType[Field.Audio].keys())
-
-    def getVideoColumnNames(self):
-        return list(self.columnsByType[Field.Video].keys())
+    def getColumnNamesByType(self, fieldType):
+        return list(self.columnsByType.get(fieldType, {}).keys())
 
     def getAttributeNames(self):
         return list(self.attributes.keys())
 
-    def getColumns(self):
-        return list(self.columns.values())
+    def getColumns(self, fieldType=None):
+        if fieldType is None:
+            return list(self.columns.values())
+        return self.getColumnsByType(fieldType)
 
-    def getTextColumns(self):
-        return list(self.columnsByType[Field.Text].values())
-
-    def getImageColumns(self):
-        return list(self.columnsByType[Field.Image].values())
-
-    def getAudioColumns(self):
-        return list(self.columnsByType[Field.Audio].values())
-
-    def getVideoColumns(self):
-        return list(self.columnsByType[Field.Video].values())
+    def getColumnsByType(self, fieldType):
+        return list(self.columnsByType.get(fieldType, {}).values())
 
     def getAttributes(self):
         return list(self.attributes.values())
 
-    def hasColumnName(self, name):
-        return sanitizeName(name, "Column") in self.columns
+    def hasColumn(self, name, fieldType=None):
+        if fieldType is None:
+            return sanitizeName(name, "Column") in self.columns
+        return self.hasColumnOfType(name, fieldType)
 
-    def hasTextColumnName(self, name):
-        return sanitizeName(name, "Column") in self.getTextColumnNames()
+    def hasColumnWithType(self, name, fieldType):
+        return sanitizeName(name, "Column") in self.getColumnNamesByType(fieldType)
 
-    def hasImageColumnName(self, name):
-        return sanitizeName(name, "Column") in self.getImageColumnNames()
-
-    def hasAudioColumnName(self, name):
-        return sanitizeName(name, "Column") in self.getAudioColumnNames()
-
-    def hasVideoColumnName(self, name):
-        return sanitizeName(name, "Column") in self.getVideoColumnNames()
-
-    def hasAttributeName(self, name):
+    def hasAttribute(self, name):
         return sanitizeName(name, "Column") in self.getAttributeNames()
 
-    def countColumns(self):
-        return len(self.columns)
-
-    def countTextColumns(self):
-        return len(self.columnsByType[Field.Text])
-
-    def countImageColumns(self):
-        return len(self.columnsByType[Field.Image])
-
-    def countAudioColumns(self):
-        return len(self.columnsByType[Field.Audio])
-
-    def countVideoColumns(self):
-        return len(self.columnsByType[Field.Video])
+    def countColumns(self, fieldType=None):
+        if fieldType is None:
+            return len(self.columns)
+        return self.countColumnsWithType(fieldType)
+    
+    def countColumnsWithType(self, fieldType):
+        return len(self.columnsByType.get(fieldType, {}))
 
     def countAttributes(self):
         return len(self.attributes)
@@ -318,6 +290,12 @@ class MediaColumnData(ColumnData):
         hasher.update(json.dumps([[f.remoteUrl, f.localUrl] for f in self.files], sort_keys=True).encode())
         return hasher.hexdigest()
 
+def instanceColumnData(fieldType):
+    if fieldType == FieldType.Text:
+        return TextColumnData()
+    else:
+        return MediaColumnData()
+
 class AttributeData(ColumnData):
     def __init__(self):
         self.values = []
@@ -349,24 +327,15 @@ class Learnable(object):
         hasher.update(json.dumps({k: v.checksum() for k, v in self.attributeData.items()}, sort_keys=True).encode())
         return hasher.hexdigest()
 
-    def getColumnData(self, nameOrColumn):
+    def getColumnData(self, nameOrColumn, fieldType=None):
         if isinstance(nameOrColumn, Column):
             name = nameOrColumn.name
+            fieldType = nameOrColumn.type
         else:
             name = nameOrColumn
-        return self.columnData[name]
-
-    def getTextColumnData(self, name):
-        return self.columnDataByType[Field.Text].get(name, TextColumnData())
-
-    def getAudioColumnData(self, name):
-        return self.columnDataByType[Field.Audio].get(name, MediaColumnData())
-
-    def getVideoColumnData(self, name):
-        return self.columnDataByType[Field.Video].get(name, MediaColumnData())
-
-    def getImageColumnData(self, name):
-        return self.columnDataByType[Field.Image].get(name, MediaColumnData())
+        if fieldType:
+            return self.columnDataByType.get(fieldType, {}).get(name, instanceColumnData(fieldType))
+        return self.columnData.get(name)
 
     def getAttributeData(self, name):
         return self.attributeData.get(name, AttributeData())
@@ -375,88 +344,12 @@ class Learnable(object):
         self.columnDataByType[column.type][column.name] = data
         self.columnData[column.name] = data
 
-    def setTextColumnData(self, name, data):
-        self.columnDataByType[Field.Text][name] = data
-        self.columnData[name] = data
-
-    def setAudioColumnData(self, name, data):
-        self.columnDataByType[Field.Audio][name] = data
-        self.columnData[name] = data
-
-    def setVideoColumnData(self, name, data):
-        self.columnDataByType[Field.Video][name] = data
-        self.columnData[name] = data
-
-    def setImageColumnData(self, name, data):
-        self.columnDataByType[Field.Image][name] = data
-        self.columnData[name] = data
-
     def setAttributeData(self, nameOrAttribute, data):
         if isinstance(nameOrAttribute, Attribute):
             name = nameOrAttribute.name
         else:
             name = nameOrAttribute
         self.attributeData[name] = data
-
-    def getDefinitions(self, name):
-        return self.getTextColumnData(name).values
-
-    def getAlternatives(self, name):
-        return self.getTextColumnData(name).alternatives
-
-    def getHiddenAlternatives(self, name):
-        return self.getTextColumnData(name).hiddenAlternatives
-
-    def getTypingCorrects(self, name):
-        return self.getTextColumnData(name).typingCorrects
-
-    def getAttributes(self, name):
-        return self.getAttributeData(name).values
-
-    def getAudioFiles(self, name):
-        return self.getAudioColumnData(name).getFiles()
-
-    def setAudioFiles(self, name, files):
-        return self.getAudioColumnData(name).setFiles(files)
-
-    def getVideoFiles(self, name):
-        return self.getVideoColumnData(name).getFiles()
-
-    def setVideoFiles(self, name, files):
-        return self.getVideoColumnData(name).setFiles(files)
-
-    def getImageFiles(self, name):
-        return self.getImageColumnData(name).getFiles()
-
-    def setImageFiles(self, name, files):
-        return self.getImageColumnData(name).setFiles(files)
-
-    def getAudioUrls(self, name):
-        return self.getAudioColumnData(name).getRemoteUrls()
-
-    def getVideoUrls(self, name):
-        return self.getVideoColumnData(name).getRemoteUrls()
-
-    def getImageUrls(self, name):
-        return self.getImageColumnData(name).getRemoteUrls()
-
-    def setLocalAudioUrls(self, name, urls):
-        self.getAudioColumnData(name).setLocalUrls(urls)
-
-    def getLocalAudioUrls(self, name):
-        return self.getAudioColumnData(name).getLocalUrls()
-
-    def setLocalVideoUrls(self, name, urls):
-        self.getVideoColumnData(name).setLocalUrls(urls)
-
-    def getLocalVideoUrls(self, name):
-        return self.getVideoColumnData(name).getLocalUrls()
-
-    def setLocalImageUrls(self, name, urls):
-        self.getImageColumnData(name).setLocalUrls(urls)
-
-    def getLocalImageUrls(self, name):
-        return self.getImageColumnData(name).getLocalUrls()
 
 class CourseLoader(object):
     def __init__(self, service):
@@ -552,12 +445,16 @@ class CourseLoader(object):
                 for screen in learnableData["screens"].values():
                     if screen['template'] == 'presentation':
                         learnable.direction = Direction(screen['item']['label'], screen['definition']['label'])
+                        sides = {
+                            'source': screen['item']['label'] if screen['item']['direction'] == 'source' else screen['definition']['label'],
+                            'target': screen['item']['label'] if screen['item']['direction'] == 'target' else screen['definition']['label']
+                        }
                         for col in itertools.chain([screen['item'], screen['definition'], screen['audio'], screen['video']], screen['visible_info'], screen['hidden_info']):
                             if not col:
                                 continue
                             column = course.getColumn(col['label'])
                             if not column:
-                                column = course.addColumn(col['kind'], col['label'], col['direction'])
+                                column = course.addColumn(col['kind'], col['label'], sides[col['direction']])
                             if col['kind'] in ['audio', 'image', 'video']:   
                                 data = MediaColumnData()
                                 data.setRemoteUrls(list(map(lambda x: self.service.toAbsoluteMediaUrl(x['normal']), col['value'])))
@@ -573,14 +470,14 @@ class CourseLoader(object):
                                 continue
                             attribute = course.getAttribute(attr['label'])
                             if not attribute:
-                                attribute = course.addAttribute(Field.Text, attr['label'])
+                                attribute = course.addAttribute(FieldType.Text, attr['label'])
                             data = AttributeData()
                             data.values = list(map(str.strip, attr['value'].split(",")))
                             learnable.setAttributeData(attribute, data)
                     elif screen['template'] == 'typing':
                         column = course.getColumn(screen['answer']['label'])
                         if column:
-                            learnable.getColumnData(column).typingCorrects = list(filter(lambda x: x != '', screen['correct']))
+                            learnable.getColumnData(column, FieldType.Text).typingCorrects = list(filter(lambda x: x != '', screen['correct']))
                 
                 level.addLearnable(learnable)
 
