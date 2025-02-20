@@ -1,5 +1,5 @@
 import urllib.request, urllib.error, urllib.parse, http.cookiejar, http.client
-import re, time, os.path, json, collections, datetime, functools, uuid, errno, itertools
+import re, time, os.path, json, collections, datetime, functools, uuid, errno, itertools, hashlib
 import bs4
 import requests.sessions
 
@@ -79,6 +79,20 @@ class Course(object):
 
     def __len__(self):
         return len(self.levels)
+
+    def all_learnables(self):
+        for level in self.levels:
+            for learnable in level:
+                yield learnable
+
+    def len_learnables(self):
+        return sum(map(len, self.levels))
+
+    def similar_learnables(self):
+        learnables = {}
+        for learnable in self.all_learnables():
+            learnables.setdefault(learnable.checksum(), []).append(learnable)
+        return learnables
 
     def getNextPosition(self):
         nextPosition = self.nextPosition
@@ -238,12 +252,21 @@ class Level(object):
     def getDirections(self):
         return list(set(map(lambda x: x.direction, self.learnables.values())))
 
-class TextColumnData(object):
+class ColumnData(object):
+    def checksum(self):
+        return None
+
+class TextColumnData(ColumnData):
     def __init__(self):
         self.values = []
         self.alternatives = []
         self.hiddenAlternatives = []
         self.typingCorrects = []
+
+    def checksum(self):
+        hasher = hashlib.blake2b()
+        hasher.update(json.dumps([self.values, self.alternatives, self.hiddenAlternatives], sort_keys=True).encode())
+        return hasher.hexdigest()
 
 class DownloadableFile(object):
     def __init__(self, remoteUrl=None):
@@ -253,21 +276,26 @@ class DownloadableFile(object):
     def isDownloaded(self):
         return bool(self.localUrl)
 
-class MediaColumnData(object):
+class MediaColumnData(ColumnData):
+    files = []
+
     def __init__(self, files=[]):
-        self.files = files
+        self.setFiles(files)
 
     def getFiles(self):
         return self.files
 
-    def setFile(self, files):
-        self.files = files
+    def setFiles(self, files):
+        self.files = list(map(lambda f: f if isinstance(DownloadableFile) else DownloadableFile(f), files))
 
     def getRemoteUrls(self):
         return [f.remoteUrl for f in self.files]
 
     def getLocalUrls(self):
         return [f.localUrl for f in self.files]
+
+    def addRemoteUrl(self, url):
+        self.files.append(DownloadableFile(url))
 
     def setRemoteUrls(self, urls):
         self.files = list(map(DownloadableFile, urls))
@@ -276,27 +304,49 @@ class MediaColumnData(object):
         for url, f in zip(urls, self.files):
             f.localUrl = url
 
+    def setLocalUrl(self, remoteUrl, localUrl):
+        for f in self.files:
+            if f.remoteUrl == remoteUrl:
+                f.localUrl = localUrl
+
     def allDownloaded(self):
         return all([f.isDownloaded() for f in self.files])
 
-class AttributeData(object):
+    def checksum(self):
+        hasher = hashlib.blake2b()
+        hasher.update(json.dumps([[f.remoteUrl, f.localUrl] for f in self.files], sort_keys=True).encode())
+        return hasher.hexdigest()
+
+class AttributeData(ColumnData):
     def __init__(self):
         self.values = []
+
+    def checksum(self):
+        hasher = hashlib.blake2b()
+        hasher.update(json.dumps(self.values, sort_keys=True).encode())
+        return hasher.hexdigest()
 
 class Learnable(object):
     def __init__(self, learnableId):
         self.id = learnableId
-        
+        self.identifiers = set([learnableId])
+
         self.course = None
+        self.level = None
         self.direction = None
-
-        self.columnData = collections.OrderedDict()
-        self.columnDataByType = collections.OrderedDict()
-        for colType in Column.Types:
-            self.columnDataByType[colType] = collections.OrderedDict()
-
-        self.attributeData = collections.OrderedDict()
         self.progress = Progress()
+
+        self.columnData = {}
+        self.columnDataByType = {}
+        for colType in Column.Types:
+            self.columnDataByType[colType] = {}
+        self.attributeData = {}
+
+    def checksum(self):
+        hasher = hashlib.blake2b()
+        hasher.update(json.dumps({k: v.checksum() for k, v in self.columnData.items()}, sort_keys=True).encode())
+        hasher.update(json.dumps({k: v.checksum() for k, v in self.attributeData.items()}, sort_keys=True).encode())
+        return hasher.hexdigest()
 
     def getColumnData(self, nameOrColumn):
         if isinstance(nameOrColumn, Column):
@@ -422,6 +472,19 @@ class CourseLoader(object):
             if hasattr(observer, signal):
                 getattr(observer, signal)(*attrs, **kwargs)
 
+    def merge_similar_learnables(self, learnables):
+        identifiers = set()
+        typingCorrects = {}
+        for l in learnables:
+            identifiers.update(l.identifiers)
+            for k, v in l.columnData.items():
+                if isinstance(v, TextColumnData) and v.typingCorrects:
+                    typingCorrects[k] = v.typingCorrects
+        for l in learnables:
+            l.identifiers.update(identifiers)
+            for k, v in typingCorrects.items():
+                l.columnData[k].typingCorrects = v
+
     def loadCourse(self, courseId):
         course = Course(courseId)
 
@@ -443,6 +506,10 @@ class CourseLoader(object):
             except LevelNotFoundError:
                 level = {}
             self.notify('levelLoaded', levelIndex, level)
+
+        for learnables in course.similar_learnables().values():
+            if len(learnables) > 1:
+                self.merge_similar_learnables(learnables)
 
         return course
 
@@ -480,6 +547,7 @@ class CourseLoader(object):
                 learnable = Learnable(learnableId)
                 learnable.progress.position = course.getNextPosition()
                 learnable.course = course
+                learnable.level = level
                 for screen in learnableData["screens"].values():
                     if screen['template'] == 'presentation':
                         learnable.direction = Direction(screen['item']['label'], screen['definition']['label'])

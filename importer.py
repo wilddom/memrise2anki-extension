@@ -760,7 +760,7 @@ class MemriseImportDialog(QDialog):
 			mw.col.models.save(model)
 
 	def findExistingNote(self, deckName, course, learnable):
-		notes = mw.col.find_notes('deck:"{}" {}:"{}"'.format(deckName, 'Learnable', learnable.id))
+		notes = mw.col.find_notes('deck:"{}" "{}:re:(,|^){}(,|$)"'.format(deckName, 'Learnable', learnable.id))
 		if notes:
 			return mw.col.getNote(notes[0])
 
@@ -837,7 +837,7 @@ class MemriseImportDialog(QDialog):
 						ankiNote['Level'] = ', '.join(sorted(levels))
 
 					if 'Learnable' in list(ankiNote.keys()):
-						ankiNote['Learnable'] = str(learnable.id)
+						ankiNote['Learnable'] = ','.join(map(str, sorted(learnable.identifiers)))
 
 					for tag in tags:
 						ankiNote.add_tag(tag)
@@ -845,7 +845,8 @@ class MemriseImportDialog(QDialog):
 					if not ankiNote.cards():
 						mw.col.addNote(ankiNote)
 					ankiNote.flush()
-					noteCache[learnable.id] = ankiNote
+					for learnable_id in learnable.identifiers:
+						noteCache[learnable_id] = ankiNote
 
 					scheduleInfo = learnable.progress
 					if scheduleInfo:
