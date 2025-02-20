@@ -1,7 +1,8 @@
 import urllib.request, urllib.error, urllib.parse, http.cookiejar, http.client
 import re, time, os.path, json, collections, datetime, functools, uuid, errno, itertools, hashlib
 import bs4
-import requests.sessions
+import requests.adapters, requests.sessions
+from urllib3.util.retry import Retry
 
 def sanitizeName(name, default=""):
     name = re.sub(r"<.*?>", "", name)
@@ -592,42 +593,6 @@ class CourseLoader(object):
 
         return level
 
-class IncompleteReadHttpAndHttpsHandler(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
-    def __init__(self, debuglevel=0):
-        urllib.request.HTTPHandler.__init__(self, debuglevel)
-        urllib.request.HTTPSHandler.__init__(self, debuglevel)
-
-    @staticmethod
-    def makeHttp10(http_class, *args, **kwargs):
-        h = http_class(*args, **kwargs)
-        h._http_vsn = 10
-        h._http_vsn_str = "HTTP/1.0"
-        return h
-
-    @staticmethod
-    def read(response, reopen10, amt=None):
-        if hasattr(response, "response10"):
-            return response.response10.read(amt)
-        else:
-            try:
-                return response.read_savedoriginal(amt)
-            except http.client.IncompleteRead:
-                response.response10 = reopen10()
-                return response.response10.read(amt)
-
-    def do_open_wrapped(self, http_class, req, **http_conn_args):
-        response = self.do_open(http_class, req, **http_conn_args)
-        response.read_savedoriginal = response.read
-        reopen10 = functools.partial(self.do_open, functools.partial(self.makeHttp10, http_class, **http_conn_args), req)
-        response.read = functools.partial(self.read, response, reopen10)
-        return response
-
-    def http_open(self, req):
-        return self.do_open_wrapped(http.client.HTTPConnection, req)
-
-    def https_open(self, req):
-        return self.do_open_wrapped(http.client.HTTPSConnection, req, context=self._context)
-
 class MemriseError(RuntimeError):
     pass
 
@@ -642,27 +607,12 @@ class Service(object):
         self.downloadDirectory = downloadDirectory
         if cookiejar is None:
             cookiejar = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(IncompleteReadHttpAndHttpsHandler, urllib.request.HTTPCookieProcessor(cookiejar))
         self.session = requests.Session()
         self.session.cookies = cookiejar
-
-    def openWithRetry(self, url, maxAttempts=5, attempt=1):
-        try:
-            return self.opener.open(url)
-        except urllib.error.URLError as e:
-            if e.errno == errno.ECONNRESET and maxAttempts > attempt:
-                time.sleep(1.0*attempt)
-                return self.openWithRetry(url, maxAttempts, attempt+1)
-            else:
-                raise
-        except http.client.BadStatusLine:
-            # not clear why this error occurs (seemingly randomly),
-            # so I regret that all we can do is wait and retry.
-            if maxAttempts > attempt:
-                time.sleep(0.1)
-                return self.openWithRetry(url, maxAttempts, attempt+1)
-            else:
-                raise
+        retry_strategy = Retry(total=5, backoff_factor=1.0)
+        adapter =  requests.adapters.HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def getCookie(self, name):
         cookies = requests.utils.dict_from_cookiejar(self.session.cookies)
@@ -808,8 +758,9 @@ class Service(object):
         if skipExisting and os.path.isfile(fullMediaPath) and os.path.getsize(fullMediaPath) > 0:
             return localName
 
-        data = self.openWithRetry(url).read()
+        response = self.session.get(url, stream=True)
         with open(fullMediaPath, "wb") as mediaFile:
-            mediaFile.write(data)
+            for chunk in response.iter_content(chunk_size=1024):
+                mediaFile.write(chunk)
 
         return localName
