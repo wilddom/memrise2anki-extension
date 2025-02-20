@@ -1,7 +1,7 @@
 memrise2anki-extension
 ======================
 
-An extension for Anki 25 which downloads and converts a course from Memrise into an Anki deck.
+An extension for Anki 25 which downloads and converts a community course from Memrise into an Anki deck.
 
 How to install
 --------------
@@ -59,7 +59,7 @@ assign the existing template to a testing direction.
 Mems
 ----
 
-Unfortunately the import of your mems from Memrise is no longer possible.
+Unfortunately importing your mems from Memrise is no longer possible.
 
 
 Bug Reports
