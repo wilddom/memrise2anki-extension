@@ -1,7 +1,7 @@
 memrise2anki-extension
 ======================
 
-An extension for Anki 25 which downloads and converts a community course from Memrise into an Anki deck.
+An extension for Anki which downloads and converts a community course from Memrise into an Anki deck.
 
 How to install
 --------------
@@ -25,9 +25,10 @@ All fields can be renamed and reordered freely.
 Templates (Card type)
 ---------------------
 
-Templates are generated for the directions you are tested on Memrise. Only when the course creator creates a level with
-reversed columns, we generate a template for this direction. But you are free to create your own card types in Anki
-after the import.
+Templates are generated for the directions in which you are tested on Memrise. Only when the course creator creates a
+level with reversed columns, we generate a template for this direction. But you are free to create your own card types
+in Anki after the import. If you want to update a previously downloaded deck and the templates have been renamed manually,
+a dialog will help you to assign the existing template to a testing direction.
 
 Field mapping
 -------------
@@ -53,8 +54,7 @@ Intervals
 ---------
 
 Progress (intervals, due dates, etc.) from Memrise can be imported. But be cautious to not overwrite your local Anki progress in
-case you want to update an already downloaded deck. If the templates have been renamed manually, a dialog will help you to
-assign the existing template to a testing direction.
+case you want to update an already downloaded deck.
 
 Mems
 ----
