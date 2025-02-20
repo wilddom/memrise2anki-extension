@@ -236,7 +236,7 @@ class ModelMappingDialog(QDialog):
 		self.modelSelection.clear()
 		self.modelSelection.addItem("--- create new ---")
 		self.modelSelection.insertSeparator(1)
-		for name in sorted(self.col.models.all_names()):
+		for name in sorted([n.name for n in self.col.models.all_names_and_ids()]):
 			self.modelSelection.addItem(name)
 
 	@staticmethod
@@ -283,47 +283,47 @@ class ModelMappingDialog(QDialog):
 		m = mm.new(name)
 
 		for colName in course.getTextColumnNames():
-			dfm = mm.newField(colName)
-			mm.addField(m, dfm)
-			afm = mm.newField("{} {}".format(colName, "Alternatives"))
-			mm.addField(m, afm)
-			hafm = mm.newField("{} {}".format(colName, "Hidden Alternatives"))
-			mm.addField(m, hafm)
-			tcfm = mm.newField("{} {}".format(colName, "Typing Corrects"))
-			mm.addField(m, tcfm)
+			dfm = mm.new_field(colName)
+			mm.add_field(m, dfm)
+			afm = mm.new_field("{} {}".format(colName, "Alternatives"))
+			mm.add_field(m, afm)
+			hafm = mm.new_field("{} {}".format(colName, "Hidden Alternatives"))
+			mm.add_field(m, hafm)
+			tcfm = mm.new_field("{} {}".format(colName, "Typing Corrects"))
+			mm.add_field(m, tcfm)
 
 		for attrName in course.getAttributeNames():
-			fm = mm.newField(attrName)
-			mm.addField(m, fm)
+			fm = mm.new_field(attrName)
+			mm.add_field(m, fm)
 
 		for colName in course.getImageColumnNames():
-			fm = mm.newField(colName)
-			mm.addField(m, fm)
+			fm = mm.new_field(colName)
+			mm.add_field(m, fm)
 
 		for colName in course.getAudioColumnNames():
-			fm = mm.newField(colName)
-			mm.addField(m, fm)
+			fm = mm.new_field(colName)
+			mm.add_field(m, fm)
 
-		fm = mm.newField("Level")
-		mm.addField(m, fm)
+		fm = mm.new_field("Level")
+		mm.add_field(m, fm)
 
-		fm = mm.newField("Learnable")
-		mm.addField(m, fm)
+		fm = mm.new_field("Learnable")
+		mm.add_field(m, fm)
 
 		m['css'] += "\n.alts {\n font-size: 14px;\n}"
 		m['css'] += "\n.attrs {\n font-style: italic;\n font-size: 14px;\n}"
 
 		for direction in course.getDirections():
-			t = mm.newTemplate(str(direction))
+			t = mm.new_template(str(direction))
 			self.__createTemplate(t, course, direction.front, direction.back)
-			mm.addTemplate(m, t)
+			mm.add_template(m, t)
 
 		return m
 
 	def __loadModel(self, learnable, deck=None):
 		model = self.__createMemriseModel(learnable.course)
 
-		modelStored = self.col.models.byName(model['name'])
+		modelStored = self.col.models.by_name(model['name'])
 		if modelStored:
 			if self.col.models.scmhash(modelStored) == self.col.models.scmhash(model):
 				model = modelStored
@@ -355,7 +355,7 @@ class ModelMappingDialog(QDialog):
 			self.models[learnable.course.id] = self.__loadModel(learnable, deck)
 		else:
 			modelName = self.modelSelection.currentText()
-			self.models[learnable.course.id] = self.col.models.byName(modelName)
+			self.models[learnable.course.id] = self.col.models.by_name(modelName)
 
 		return self.models[learnable.course.id]
 
@@ -762,7 +762,7 @@ class MemriseImportDialog(QDialog):
 	def findExistingNote(self, deckName, course, learnable):
 		notes = mw.col.find_notes('deck:"{}" "{}:re:(,|^){}(,|$)"'.format(deckName, 'Learnable', learnable.id))
 		if notes:
-			return mw.col.getNote(notes[0])
+			return mw.col.get_note(notes[0])
 
 		return None
 
@@ -822,7 +822,7 @@ class MemriseImportDialog(QDialog):
 					if not ankiNote:
 						model = self.modelMapper.getModel(learnable, deck)
 						self.saveDeckModelRelation(deck, model)
-						ankiNote = mw.col.newNote()
+						ankiNote = mw.col.new_note(model)
 
 					mapping = self.fieldMapper.getFieldMappings(course, ankiNote.note_type())
 					for field, data in list(mapping.items()):
@@ -843,8 +843,8 @@ class MemriseImportDialog(QDialog):
 						ankiNote.add_tag(tag)
 
 					if not ankiNote.cards():
-						mw.col.addNote(ankiNote)
-					ankiNote.flush()
+						mw.col.add_note(ankiNote, deck['id'])
+					mw.col.update_note(ankiNote)
 					for learnable_id in learnable.identifiers:
 						noteCache[learnable_id] = ankiNote
 
@@ -871,14 +871,14 @@ class MemriseImportDialog(QDialog):
 									card.lapses = scheduleInfo.incorrect
 									card.due = mw.col.sched.today + (scheduleInfo.next_date.date() - datetime.datetime.now(datetime.UTC).date()).days
 									card.factor = 2500
-								card.flush()
+								mw.col.update_card(card)
 							if scheduleInfo.ignored:
 								mw.col.sched.suspendCards([card.id for card in cards])
 						else:
 							for card in cards:
 								if card.type == 0 and card.queue == 0:
 									card.due = scheduleInfo.position
-									card.flush()
+									mw.col.update_card(card)
 
 					self.progressBar.setValue(self.progressBar.value()+1)
 					QApplication.processEvents()
@@ -889,7 +889,6 @@ class MemriseImportDialog(QDialog):
 			exc_info = sys.exc_info()
 			raise exc_info[0](exc_info[1]).with_traceback(exc_info[2])
 
-		mw.col.reset()
 		mw.reset()
 
 		# refresh deck browser so user can see the newly imported deck
