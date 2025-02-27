@@ -70,8 +70,9 @@ Please report bugs and suggestions using the [github issue tracker](https://gith
 Fair use
 --------
 
-Good wordlists don't come for free, they are the result of a lot of work. Respect the rights of the authors and their hard work.
-And please support the guys at Memrise by subscribing to [premium](https://www.memrise.com/premium/).
+Memrise is sunsetting community courses. This add-on allows you to export these courses and your learning progress.
+Nevertheless, the copyright of the courses remains with the respective authors. Please respect the rights of
+the authors and their work.
 
 
 Credits
