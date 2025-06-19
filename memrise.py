@@ -13,6 +13,15 @@ def sanitizeName(name, default=""):
         return default
     return name
 
+def parse_date(iso_str):
+    try:
+        dt = datetime.datetime.fromisoformat(iso_str)
+    except ValueError:
+        dt = datetime.datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
+    if dt.tzinfo is None:
+        dt.replace(tzinfo=datetime.timezone.utc)
+    return dt
+
 class Direction(object):
     def __init__(self, front=None, back=None):
         self.front = front
@@ -33,11 +42,18 @@ class Direction(object):
     def __str__(self):
         return "{} -> {}".format(self.front, self.back)
 
-class FieldType(enum.StrEnum):
-    Text = 'text'
-    Audio = 'audio'
-    Image = 'image'
-    Video = 'video'
+try:
+    class FieldType(enum.StrEnum):
+        Text = 'text'
+        Audio = 'audio'
+        Image = 'image'
+        Video = 'video'
+except AttributeError:
+    class FieldType(str, enum.Enum):
+        Text = 'text'
+        Audio = 'audio'
+        Image = 'image'
+        Video = 'video'
 
 class Field(object):
     def __init__(self, fieldType, name):
@@ -410,9 +426,9 @@ class CourseLoader(object):
     @staticmethod
     def loadProgress(learnable, data):
         learnable.progress.ignored = data['ignored']
-        learnable.progress.last_date = datetime.datetime.fromisoformat(data['last_date']).replace(tzinfo=datetime.UTC)
-        learnable.progress.created_date = datetime.datetime.fromisoformat(data['created_date']).replace(tzinfo=datetime.UTC)
-        learnable.progress.next_date = datetime.datetime.fromisoformat(data['next_date']).replace(tzinfo=datetime.UTC)
+        learnable.progress.last_date = parse_date(data['last_date'])
+        learnable.progress.created_date = parse_date(data['created_date'])
+        learnable.progress.next_date = parse_date(data['next_date'])
         learnable.progress.interval = data['interval']
         learnable.progress.growth_level = data['growth_level']
         learnable.progress.attempts = data.get('attempts', 0)
