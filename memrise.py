@@ -532,14 +532,21 @@ class Service(object):
         return cookies.get(name)
 
     def isLoggedIn(self):
-        response = self.session.get('https://community-courses.memrise.com/v1.23/me/', headers={'Referer': 'https://www.memrise.com/app'})
+        response = self.session.get('https://community-courses.memrise.com/v1.25/me/', headers={'Referer': 'https://www.memrise.com/app'})
         return response.status_code == 200
 
     def login(self, username, password):
         signin_page = self.session.get("https://community-courses.memrise.com/signin")
         signin_soup = bs4.BeautifulSoup(signin_page.content, "html.parser")
-        info_json = json.loads(signin_soup.select_one("#__NEXT_DATA__").string)
-        client_id = info_json["runtimeConfig"]["OAUTH_CLIENT_ID"]
+        info_json = {}
+        for script in signin_soup.find_all("script"):
+            if not script.string:
+                continue
+            match = re.search(r"window\.__RUNTIME_CONFIG__\s*=\s*(\{.*?\})\s*;?\s*$", script.string, re.DOTALL)
+            if match:
+                info_json = json.loads(match.group(1))
+                break
+        client_id = info_json["OAUTH_CLIENT_ID"]
         signin_data = {
             'username': username,
             'password': password,
@@ -547,12 +554,12 @@ class Service(object):
             'grant_type': 'password'
         }
 
-        obtain_login_token_res = self.session.post('https://community-courses.memrise.com/v1.23/auth/access_token/', json=signin_data)
+        obtain_login_token_res = self.session.post('https://community-courses.memrise.com/v1.25/auth/access_token/', json=signin_data)
         if not obtain_login_token_res.ok:
             return False
         token = obtain_login_token_res.json()["access_token"]["access_token"]
 
-        actual_login_res = self.session.get('https://community-courses.memrise.com/v1.23/auth/web/', params={'invalidate_token_after': 'true', 'token': token})
+        actual_login_res = self.session.get('https://community-courses.memrise.com/v1.25/auth/web/', params={'invalidate_token_after': 'true', 'token': token})
 
         if not actual_login_res.json()["success"]:
             return False
@@ -647,7 +654,7 @@ class Service(object):
 
     @staticmethod
     def getJsonLevelUrl():
-        return "https://community-courses.memrise.com/v1.23/learning_sessions/preview/"
+        return "https://community-courses.memrise.com/v1.25/learning_sessions/preview/"
 
     @staticmethod
     def toAbsoluteMediaUrl(url):
